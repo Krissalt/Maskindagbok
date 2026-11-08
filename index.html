@@ -97,6 +97,13 @@
   .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px}
   .tours{margin:8px 0 0;padding:0;list-style:none;font-size:.88rem}
   .tours li{padding:6px 2px;border-top:1px solid var(--line);display:flex;justify-content:space-between}
+  .jrow{display:flex;align-items:center;gap:10px;padding:12px 12px 12px 14px}
+  .jrow .jbody{flex:1;min-width:0;cursor:pointer}
+  .jrow .jbody b{display:block;font-weight:600}
+  .jrow .jbody .sub{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qdone{flex:none;width:46px;height:46px;border-radius:50%;border:2px solid var(--ok);background:#fff;color:var(--ok);font-size:1.3rem;font-weight:700;cursor:pointer}
+  .qdone:active{background:var(--ok);color:#fff}
+  .grp{font-size:.8rem;font-weight:700;color:var(--muted);margin:16px 4px 6px;text-transform:uppercase;letter-spacing:.05em}
   .day{font-size:.8rem;font-weight:700;color:var(--muted);margin:16px 4px 6px}
   .jentry{display:flex;gap:12px;cursor:pointer}
   .jentry .time{font-weight:700;font-variant-numeric:tabular-nums;min-width:44px;color:var(--brand)}
@@ -162,6 +169,7 @@
 <button class="fab" id="fab" aria-label="Legg til">+</button>
 <nav class="tabs">
   <button id="tabJournal" class="on"><b>📒</b>Dagbok</button>
+  <button id="tabJobs"><b>✅</b>Jobber</button>
   <button id="tabMachines"><b>⚙️</b>Maskiner</button>
 </nav>
 <div class="toast" id="toast"></div>
@@ -208,9 +216,13 @@
   <label>Jobb *</label><input name="name" required placeholder="F.eks. Smøreoljesystem">
   <div class="row">
     <div><label>Type</label><select name="kind"><option value="service">🛠️ Service</option><option value="inspeksjon">🔍 Kontroll</option></select></div>
-    <div><label>Intervall (timer) *</label><input name="interval" type="number" inputmode="numeric" min="1" required></div>
+    <div><label>Går etter</label><select name="unit"><option value="h">Kjøretimer</option><option value="d">Dager</option></select></div>
   </div>
-  <label>Sist utført ved (timer)</label><input name="lastHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0 hvis aldri">
+  <div class="row">
+    <div><label id="ivLabel">Intervall (timer) *</label><input name="interval" type="number" inputmode="numeric" min="1" required></div>
+    <div id="lastHWrap"><label>Sist utført ved (timer)</label><input name="lastHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0 hvis aldri"></div>
+    <div id="lastDWrap"><label>Sist utført</label><input name="lastDate" type="date"></div>
+  </div>
   <label>Beskrivelse</label><textarea name="desc" placeholder="Hva skal gjøres"></textarea>
   <div class="btns">
     <button type="button" class="btn del" id="jobDelBtn" hidden>Slett</button>
@@ -299,7 +311,7 @@
     <button id="importBtn">⬆️ Gjenopprett fra sikkerhetskopi</button>
     <button id="csvBtn">📄 Eksporter logg som CSV (Excel)</button>
     <button id="turnusBtn">🗓️ Turnus</button>
-    <button id="seedBtn">⚙️ Legg inn Scania- og John Deere-maskinene fra CCOM</button>
+    <button id="seedBtn">⚙️ Hent maskinavdelingens jobber fra CCOM</button>
   </div>
   <p class="hint" id="ver" style="float:right;margin:0"></p>
   <p class="hint">Alt lagres kun på denne telefonen, i nettleseren. Ta sikkerhetskopi av og til, så mister du ingenting hvis nettleserdata slettes.</p>
@@ -332,7 +344,8 @@
 <script>
 (() => {
   const KEY = 'maskindagbok.v1';
-  const SEED = [{"id": "ccom-601.01", "name": "Scania generator 1", "icon": "⚙️", "model": "Scania DI13 074M · SFI 601.01", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": {"hours": 4343, "date": "2026-11-02"}, "avgPerDay": 6, "entries": [], "created": 0, "jobs": [{"id": "ccom-8dc50e16", "name": "Zinker / Offeranode", "kind": "inspeksjon", "interval": 160, "lastHours": 4305, "desc": "Kontrollere zinker / offeranoder.\nByttes v/ 2/3 (60-70%) slitasje\nZinker er plassert i akterkant av sjøvannskjøler på undersiden og i forkant av varmeveksler på undersiden. (Gule/messing bolthoder)"}, {"id": "ccom-fe694324", "name": "Skifte drivstoffiltre", "kind": "service", "interval": 1000, "lastHours": 3856, "desc": "Skifte finfilter og forfilter"}, {"id": "ccom-bd4c0d0f", "name": "Sjøvannspumpe / Impeller", "kind": "inspeksjon", "interval": 500, "lastHours": 4055, "desc": "Kontrollere skovlhjul på sjøvannspumpe / impeller\nSjekk pumpehuset for slitasjer/skader og tæring\nSkiftes etter behov"}, {"id": "ccom-b6743607", "name": "Drivreim", "kind": "inspeksjon", "interval": 1000, "lastHours": 4124, "desc": "Kontrollere drivreim for slitasje og skader\nByttes ved slitasje ned til strengen"}, {"id": "ccom-2e1cbf85", "name": "Kjølevæske", "kind": "service", "interval": 6000, "lastHours": 0, "desc": "Tappe ned kjølevæske, rengjøre systemet med ferskvann\nFylle på ny kjølevæske, kjøre motor i 10-15 min. deretter etterfylle kjølevæske dersom nødvendig"}, {"id": "ccom-e68e7475", "name": "Ventilklaring og innsprøytningsventil", "kind": "inspeksjon", "interval": 2000, "lastHours": 3373, "desc": "Kontroll og justering av ventilklaring\nInnsugsventil: 0,45 mm \nEksosventil: 0,7 mm.\nTiltrekkingsmoment for låsemutter: 35 Nm\nJusteringsrekkefølge: 6 - 2 - 4 - 1 - 5 - 3\nSe s.73-75 i Instuksjonsbok for DI13\nInnsprøytningsventil\nJusteres slik at stempelet er i fluky med den øvre overflaten på verktøyet\nTiltrekkingsmoment for låsemutter: 39 Nm\nJusteringsrekkefølge: 2 - 4 - 1 - 5 - 3 - 6\nSe s.76 og 77 i instruksjonsbok for DI13"}, {"id": "ccom-e8e0f0c2", "name": "Luftfilter", "kind": "service", "interval": 1000, "lastHours": 3856, "desc": "Sjekke luftfilter for skader, slitasje og om det er tett\nSkifte dersom nødvendig"}, {"id": "ccom-8cb135cb", "name": "Smøreoljesystem", "kind": "service", "interval": 500, "lastHours": 3866, "desc": "Skifte smøreolje, filter og rengjøre sentrifugalfilter.\nTa oljeprøve"}, {"id": "ccom-5752a052", "name": "Tappe vannutskiller-forfilter", "kind": "inspeksjon", "interval": 500, "lastHours": 3866, "desc": ""}]}, {"id": "ccom-601.02", "name": "Scania generator 2", "icon": "⚙️", "model": "Scania DI13 074M · SFI 601.02", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": {"hours": 5219, "date": "2026-11-02"}, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-5fb92a5f", "name": "Sjøvannspumpe / Impeller", "kind": "inspeksjon", "interval": 500, "lastHours": 4714, "desc": "Kontrollere skovlhjul på sjøvannspumpe / impeller\nSjekk pumpehuset for slitasjer/skader og tæring\nSkiftes etter behov"}, {"id": "ccom-4109356c", "name": "Smøreoljesystem", "kind": "service", "interval": 500, "lastHours": 4793, "desc": "Skifte smørolje, filter og rengjøre sentrifugalfilter\nTa oljeprøve"}, {"id": "ccom-c2215a9b", "name": "Drivreim", "kind": "inspeksjon", "interval": 1000, "lastHours": 4289, "desc": "Kontrollere drivreim for slitasje og skader\nByttes ved slitasje ned til strengen"}, {"id": "ccom-c02b7104", "name": "Kjølevæske", "kind": "service", "interval": 6000, "lastHours": 0, "desc": "Tappe ned kjølevæske, rengjøre systemet med ferskvann\nFylle på ny kjølevæske, kjøre motor i 10-15 min. deretter etterfylle kjølevæske dersom nødvendig"}, {"id": "ccom-0b73c072", "name": "Luftfilter", "kind": "service", "interval": 1000, "lastHours": 5145, "desc": "Sjekke luftfilter for skader, slitasje og om det er tett\nSkifte dersom nødvendig"}, {"id": "ccom-8992130c", "name": "Zinker / Offeranode", "kind": "inspeksjon", "interval": 160, "lastHours": 5093, "desc": "Kontrollere zinker / offeranoder.\nByttes v/ 2/3 (60-70%) slitasje\nZinker er plassert i akterkant av sjøvannskjøler på undersiden og i forkant av varmeveksler på undersiden. (Gule/messing bolthoder)"}, {"id": "ccom-0ffc1f01", "name": "Ventilklaring og innsprøytningsventil", "kind": "inspeksjon", "interval": 2000, "lastHours": 3761, "desc": "Kontroll og justering av ventilklaring\nInnsugsventil: 0,45 mm \nEksosventil: 0,7 mm.\nTiltrekkingsmoment for låsemutter: 35 Nm\nJusteringsrekkefølge: 6 - 2 - 4 - 1 - 5 - 3\nSe s.73-75 i Instuksjonsbok for DI13\nInnsprøytningsventil\nJusteres slik at stempelet er i fluky med den øvre overflaten på verktøyet\nTiltrekkingsmoment for låsemutter: 39 Nm\nJusteringsrekkefølge: 2 - 4 - 1 - 5 - 3 - 6\nSe s.76 og 77 i instruksjonsbok for DI13"}, {"id": "ccom-5426f719", "name": "Skifte drivstoffiltre", "kind": "service", "interval": 1000, "lastHours": 5145, "desc": "Skifte finfilter og forfilter"}, {"id": "ccom-89493fa2", "name": "Tappe vannutskiller-forfilter", "kind": "inspeksjon", "interval": 500, "lastHours": 4891, "desc": "Tappe ut vann fra vannutskiller-forfilter til scania"}]}, {"id": "ccom-601.03", "name": "Scania generator 3", "icon": "⚙️", "model": "Scania DI13 074M · SFI 601.03", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": {"hours": 5423, "date": "2026-11-02"}, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-34e25f4b", "name": "Drivreim", "kind": "inspeksjon", "interval": 1000, "lastHours": 4449, "desc": "Kontrollere drivreim for slitasje og skader\nByttes ved slitasje ned til strengen"}, {"id": "ccom-c69d386a", "name": "Ventilklaring og innsprøytningsventil", "kind": "inspeksjon", "interval": 2000, "lastHours": 3772, "desc": "Kontroll og justering av ventilklaring\nInnsugsventil: 0,45 mm \nEksosventil: 0,7 mm.\nTiltrekkingsmoment for låsemutter: 35 Nm\nJusteringsrekkefølge: 6 - 2 - 4 - 1 - 5 - 3\nSe s.73-75 i Instuksjonsbok for DI13\nInnsprøytningsventil\nJusteres slik at stempelet er i fluky med den øvre overflaten på verktøyet\nTiltrekkingsmoment for låsemutter: 39 Nm\nJusteringsrekkefølge: 2 - 4 - 1 - 5 - 3 - 6\nSe s.76 og 77 i instruksjonsbok for DI13"}, {"id": "ccom-e9f31917", "name": "Zinker / Offeranode", "kind": "inspeksjon", "interval": 160, "lastHours": 5396, "desc": "Kontrollere zinker / offeranoder.\nByttes v/ 2/3 (60-70%) slitasje\nZinker er plassert i akterkant av sjøvannskjøler på undersiden og i forkant av varmeveksler på undersiden. (Gule/messing bolthoder)"}, {"id": "ccom-64283d7e", "name": "Smøreoljesystem", "kind": "service", "interval": 500, "lastHours": 4938, "desc": "Skifte smørolje, filter og rengjøre sentrifugalfilter\nTa oljeprøve"}, {"id": "ccom-57a24dae", "name": "Skifte drivstoffiltre", "kind": "service", "interval": 1000, "lastHours": 5396, "desc": "Skifte finfilter og forfilter"}, {"id": "ccom-048da0d2", "name": "Sjøvannspumpe / Impeller", "kind": "inspeksjon", "interval": 500, "lastHours": 5050, "desc": "Kontrollere skovlhjul på sjøvannspumpe / impeller\nSjekk pumpehuset for slitasjer/skader og tæring\nSkiftes etter behov"}, {"id": "ccom-8ddc2742", "name": "Luftfilter", "kind": "service", "interval": 1000, "lastHours": 5396, "desc": "Sjekke luftfilter for skader, slitasje og om det er tett\nSkifte dersom nødvendig"}, {"id": "ccom-57b78d49", "name": "Kjølevæske", "kind": "service", "interval": 6000, "lastHours": 0, "desc": "Tappe ned kjølevæske, rengjøre systemet med ferskvann\nFylle på ny kjølevæske, kjøre motor i 10-15 min. deretter etterfylle kjølevæske dersom nødvendig"}, {"id": "ccom-c5c277ce", "name": "Tappe vannutskiller-forfilter", "kind": "inspeksjon", "interval": 500, "lastHours": 5396, "desc": "Tappe ut vann fra vannutskiller-forfilter til scania"}]}, {"id": "ccom-65.001", "name": "John Deere havneaggregat", "icon": "⚙️", "model": "John Deere 6068 TFM50 6.8 L · SFI 65.001", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": {"hours": 6062, "date": "2026-11-02"}, "avgPerDay": 12, "entries": [], "created": 0, "jobs": [{"id": "ccom-72de0d85", "name": "Visuell kontroll og sjekk", "kind": "inspeksjon", "interval": 250, "lastHours": 6019, "desc": "Sjekk motorlabber, etterstramme dersom nødvendig (Nm)\nSjekk drivreim for slitasje, skader og etterstramme dersom nødvendig ()\nSjekk jordingskoblinger\nSjekk zink / offeranode\nSjekk batterikoblinger (smøres med vaseline)"}, {"id": "ccom-7cf9911e", "name": "Ventilklaring", "kind": "inspeksjon", "interval": 2000, "lastHours": 6019, "desc": "Kontrollere og justere ventilklaring"}, {"id": "ccom-10b5914d", "name": "Innsprøytningsdyser", "kind": "service", "interval": 10000, "lastHours": 0, "desc": "Skifte innsprøytningsdyser."}, {"id": "ccom-0b80a681", "name": "Ladeluftkjøler og varmeveksler", "kind": "inspeksjon", "interval": 500, "lastHours": 6019, "desc": "Sjekk og rengjør varmeveksler og ladeluftkjøler"}, {"id": "ccom-3ff5220d", "name": "Luftfilter", "kind": "service", "interval": 1000, "lastHours": 5190, "desc": "Sjekke luftfilter, skiftes v/ skade eller dersom det begynner å bli tett"}, {"id": "ccom-ae42fa4b", "name": "Kjølesystem", "kind": "service", "interval": 6000, "lastHours": 6000, "desc": "Tappe ned kjølevæske, flushe system m/ ferskvann, fylle på ny kjølevæske\nCool-gard 2 kjølevæske har levetid på 6000 timer."}, {"id": "ccom-1e0557d5", "name": "Skifte forfilter og finfilter", "kind": "service", "interval": 1000, "lastHours": 4967, "desc": "Skifte dieselfilter (fin- og forfilter)"}, {"id": "ccom-b0aebda9", "name": "Sjøvannspumpe", "kind": "inspeksjon", "interval": 1000, "lastHours": 4967, "desc": "Kontroll og sjekk av sjøvannspumpe, skifte impeller v/ slitasje og skader."}, {"id": "ccom-5b4896ea", "name": "Smøreoljesystem", "kind": "service", "interval": 500, "lastHours": 5639, "desc": "Skifte smøreolje og filter"}, {"id": "ccom-5b56d9d9", "name": "Tappe ut av vannutskiller-forfilter", "kind": "inspeksjon", "interval": 500, "lastHours": 5660, "desc": "Tappe ut vann fra vannutskiller-forfilter\n24mm fastnøkkel passer til bolten."}]}];
+  const SEED_VERSION = 2;
+  const SEED = [{"id": "ccom-601.01", "name": "Scania generator 1", "icon": "⚙️", "group": "Motorer", "model": "Scania DI13 074M · SFI 601.01", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": {"hours": 4343, "date": "2026-11-02"}, "avgPerDay": 6, "entries": [], "created": 0, "jobs": [{"id": "ccom-912d4028", "name": "Ladeluftkjøler", "kind": "service", "desc": "Demontere og rengjøre ladeluftkjøler", "intervalDays": 365, "lastDate": "2026-01-20"}, {"id": "ccom-8dc50e16", "name": "Zinker / Offeranode", "kind": "inspeksjon", "desc": "Kontrollere zinker / offeranoder.\nByttes v/ 2/3 (60-70%) slitasje\nZinker er plassert i akterkant av sjøvannskjøler på undersiden og i forkant av varmeveksler på undersiden. (Gule/messing bolthoder)", "interval": 160, "lastHours": 4305}, {"id": "ccom-fe694324", "name": "Skifte drivstoffiltre", "kind": "service", "desc": "Skifte finfilter og forfilter", "interval": 1000, "lastHours": 3856}, {"id": "ccom-bd4c0d0f", "name": "Sjøvannspumpe / Impeller", "kind": "inspeksjon", "desc": "Kontrollere skovlhjul på sjøvannspumpe / impeller\nSjekk pumpehuset for slitasjer/skader og tæring\nSkiftes etter behov", "interval": 500, "lastHours": 4055}, {"id": "ccom-b6743607", "name": "Drivreim", "kind": "inspeksjon", "desc": "Kontrollere drivreim for slitasje og skader\nByttes ved slitasje ned til strengen", "interval": 1000, "lastHours": 4124}, {"id": "ccom-2e1cbf85", "name": "Kjølevæske", "kind": "service", "desc": "Tappe ned kjølevæske, rengjøre systemet med ferskvann\nFylle på ny kjølevæske, kjøre motor i 10-15 min. deretter etterfylle kjølevæske dersom nødvendig", "interval": 6000, "lastHours": 0}, {"id": "ccom-e68e7475", "name": "Ventilklaring og innsprøytningsventil", "kind": "inspeksjon", "desc": "Kontroll og justering av ventilklaring\nInnsugsventil: 0,45 mm \nEksosventil: 0,7 mm.\nTiltrekkingsmoment for låsemutter: 35 Nm\nJusteringsrekkefølge: 6 - 2 - 4 - 1 - 5 - 3\nSe s.73-75 i Instuksjonsbok for DI13\nInnsprøytningsventil\nJusteres slik at stempelet er i fluky med den øvre overflaten på verktøyet\nTiltrekkingsmoment for låsemutter: 39 Nm\nJusteringsrekkefølge: 2 - 4 - 1 - 5 - 3 - 6\nSe s.76 og 77 i instruksjonsbok for DI13", "interval": 2000, "lastHours": 3373}, {"id": "ccom-e8e0f0c2", "name": "Luftfilter", "kind": "service", "desc": "Sjekke luftfilter for skader, slitasje og om det er tett\nSkifte dersom nødvendig", "interval": 1000, "lastHours": 3856}, {"id": "ccom-8cb135cb", "name": "Smøreoljesystem", "kind": "service", "desc": "Skifte smøreolje, filter og rengjøre sentrifugalfilter.\nTa oljeprøve", "interval": 500, "lastHours": 3866}, {"id": "ccom-5752a052", "name": "Tappe vannutskiller-forfilter", "kind": "inspeksjon", "desc": "", "interval": 500, "lastHours": 3866}, {"id": "ccom-5f8a9876", "name": "Test av UMS alarmer", "kind": "inspeksjon", "desc": "Test at UMS (Ubemanna Maskinrom) alarmer virker. Det er alle kritiske alarmer på motoren, f.eks overspeed, lavt oljetrykk, kjølevannstrykk osv.", "intervalDays": 182, "lastDate": "2026-06-10"}]}, {"id": "ccom-601.02", "name": "Scania generator 2", "icon": "⚙️", "group": "Motorer", "model": "Scania DI13 074M · SFI 601.02", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": {"hours": 5219, "date": "2026-11-02"}, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-2dc4ad08", "name": "Ladeluftkjøler", "kind": "service", "desc": "Demontere og rengjøre ladeluftkjøler", "intervalDays": 365, "lastDate": "2026-01-20"}, {"id": "ccom-5fb92a5f", "name": "Sjøvannspumpe / Impeller", "kind": "inspeksjon", "desc": "Kontrollere skovlhjul på sjøvannspumpe / impeller\nSjekk pumpehuset for slitasjer/skader og tæring\nSkiftes etter behov", "interval": 500, "lastHours": 4714}, {"id": "ccom-4109356c", "name": "Smøreoljesystem", "kind": "service", "desc": "Skifte smørolje, filter og rengjøre sentrifugalfilter\nTa oljeprøve", "interval": 500, "lastHours": 4793}, {"id": "ccom-c2215a9b", "name": "Drivreim", "kind": "inspeksjon", "desc": "Kontrollere drivreim for slitasje og skader\nByttes ved slitasje ned til strengen", "interval": 1000, "lastHours": 4289}, {"id": "ccom-c02b7104", "name": "Kjølevæske", "kind": "service", "desc": "Tappe ned kjølevæske, rengjøre systemet med ferskvann\nFylle på ny kjølevæske, kjøre motor i 10-15 min. deretter etterfylle kjølevæske dersom nødvendig", "interval": 6000, "lastHours": 0}, {"id": "ccom-0b73c072", "name": "Luftfilter", "kind": "service", "desc": "Sjekke luftfilter for skader, slitasje og om det er tett\nSkifte dersom nødvendig", "interval": 1000, "lastHours": 5145}, {"id": "ccom-8992130c", "name": "Zinker / Offeranode", "kind": "inspeksjon", "desc": "Kontrollere zinker / offeranoder.\nByttes v/ 2/3 (60-70%) slitasje\nZinker er plassert i akterkant av sjøvannskjøler på undersiden og i forkant av varmeveksler på undersiden. (Gule/messing bolthoder)", "interval": 160, "lastHours": 5093}, {"id": "ccom-0ffc1f01", "name": "Ventilklaring og innsprøytningsventil", "kind": "inspeksjon", "desc": "Kontroll og justering av ventilklaring\nInnsugsventil: 0,45 mm \nEksosventil: 0,7 mm.\nTiltrekkingsmoment for låsemutter: 35 Nm\nJusteringsrekkefølge: 6 - 2 - 4 - 1 - 5 - 3\nSe s.73-75 i Instuksjonsbok for DI13\nInnsprøytningsventil\nJusteres slik at stempelet er i fluky med den øvre overflaten på verktøyet\nTiltrekkingsmoment for låsemutter: 39 Nm\nJusteringsrekkefølge: 2 - 4 - 1 - 5 - 3 - 6\nSe s.76 og 77 i instruksjonsbok for DI13", "interval": 2000, "lastHours": 3761}, {"id": "ccom-5426f719", "name": "Skifte drivstoffiltre", "kind": "service", "desc": "Skifte finfilter og forfilter", "interval": 1000, "lastHours": 5145}, {"id": "ccom-89493fa2", "name": "Tappe vannutskiller-forfilter", "kind": "inspeksjon", "desc": "Tappe ut vann fra vannutskiller-forfilter til scania", "interval": 500, "lastHours": 4891}, {"id": "ccom-45bbff2f", "name": "Test av UMS alarmer", "kind": "inspeksjon", "desc": "Test at UMS (Ubemanna Maskinrom) alarmer virker. Det er alle kritiske alarmer på motoren, f.eks overspeed, lavt oljetrykk, kjølevannstrykk osv.", "intervalDays": 182, "lastDate": "2026-06-10"}]}, {"id": "ccom-601.03", "name": "Scania generator 3", "icon": "⚙️", "group": "Motorer", "model": "Scania DI13 074M · SFI 601.03", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": {"hours": 5423, "date": "2026-11-02"}, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-e9971921", "name": "Ladeluftkjøler", "kind": "service", "desc": "Demontere og rengjøre ladeluftkjøler", "intervalDays": 365, "lastDate": "2026-02-12"}, {"id": "ccom-34e25f4b", "name": "Drivreim", "kind": "inspeksjon", "desc": "Kontrollere drivreim for slitasje og skader\nByttes ved slitasje ned til strengen", "interval": 1000, "lastHours": 4449}, {"id": "ccom-c69d386a", "name": "Ventilklaring og innsprøytningsventil", "kind": "inspeksjon", "desc": "Kontroll og justering av ventilklaring\nInnsugsventil: 0,45 mm \nEksosventil: 0,7 mm.\nTiltrekkingsmoment for låsemutter: 35 Nm\nJusteringsrekkefølge: 6 - 2 - 4 - 1 - 5 - 3\nSe s.73-75 i Instuksjonsbok for DI13\nInnsprøytningsventil\nJusteres slik at stempelet er i fluky med den øvre overflaten på verktøyet\nTiltrekkingsmoment for låsemutter: 39 Nm\nJusteringsrekkefølge: 2 - 4 - 1 - 5 - 3 - 6\nSe s.76 og 77 i instruksjonsbok for DI13", "interval": 2000, "lastHours": 3772}, {"id": "ccom-e9f31917", "name": "Zinker / Offeranode", "kind": "inspeksjon", "desc": "Kontrollere zinker / offeranoder.\nByttes v/ 2/3 (60-70%) slitasje\nZinker er plassert i akterkant av sjøvannskjøler på undersiden og i forkant av varmeveksler på undersiden. (Gule/messing bolthoder)", "interval": 160, "lastHours": 5396}, {"id": "ccom-64283d7e", "name": "Smøreoljesystem", "kind": "service", "desc": "Skifte smørolje, filter og rengjøre sentrifugalfilter\nTa oljeprøve", "interval": 500, "lastHours": 4938}, {"id": "ccom-57a24dae", "name": "Skifte drivstoffiltre", "kind": "service", "desc": "Skifte finfilter og forfilter", "interval": 1000, "lastHours": 5396}, {"id": "ccom-048da0d2", "name": "Sjøvannspumpe / Impeller", "kind": "inspeksjon", "desc": "Kontrollere skovlhjul på sjøvannspumpe / impeller\nSjekk pumpehuset for slitasjer/skader og tæring\nSkiftes etter behov", "interval": 500, "lastHours": 5050}, {"id": "ccom-8ddc2742", "name": "Luftfilter", "kind": "service", "desc": "Sjekke luftfilter for skader, slitasje og om det er tett\nSkifte dersom nødvendig", "interval": 1000, "lastHours": 5396}, {"id": "ccom-57b78d49", "name": "Kjølevæske", "kind": "service", "desc": "Tappe ned kjølevæske, rengjøre systemet med ferskvann\nFylle på ny kjølevæske, kjøre motor i 10-15 min. deretter etterfylle kjølevæske dersom nødvendig", "interval": 6000, "lastHours": 0}, {"id": "ccom-c5c277ce", "name": "Tappe vannutskiller-forfilter", "kind": "inspeksjon", "desc": "Tappe ut vann fra vannutskiller-forfilter til scania", "interval": 500, "lastHours": 5396}, {"id": "ccom-47d36de2", "name": "Test av UMS alarmer", "kind": "inspeksjon", "desc": "Test at UMS (Ubemanna Maskinrom) alarmer virker. Det er alle kritiske alarmer på motoren, f.eks overspeed, lavt oljetrykk, kjølevannstrykk osv.", "intervalDays": 182, "lastDate": "2026-06-10"}]}, {"id": "ccom-65.001", "name": "John Deere havneaggregat", "icon": "⚙️", "group": "Motorer", "model": "John Deere 6068 TFM50 6.8 L · SFI 65.001", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": {"hours": 6062, "date": "2026-11-02"}, "avgPerDay": 12, "entries": [], "created": 0, "jobs": [{"id": "ccom-72de0d85", "name": "Visuell kontroll og sjekk", "kind": "inspeksjon", "desc": "Sjekk motorlabber, etterstramme dersom nødvendig (Nm)\nSjekk drivreim for slitasje, skader og etterstramme dersom nødvendig ()\nSjekk jordingskoblinger\nSjekk zink / offeranode\nSjekk batterikoblinger (smøres med vaseline)", "interval": 250, "lastHours": 6019}, {"id": "ccom-7cf9911e", "name": "Ventilklaring", "kind": "inspeksjon", "desc": "Kontrollere og justere ventilklaring", "interval": 2000, "lastHours": 6019}, {"id": "ccom-10b5914d", "name": "Innsprøytningsdyser", "kind": "service", "desc": "Skifte innsprøytningsdyser.", "interval": 10000, "lastHours": 0}, {"id": "ccom-0b80a681", "name": "Ladeluftkjøler og varmeveksler", "kind": "inspeksjon", "desc": "Sjekk og rengjør varmeveksler og ladeluftkjøler", "interval": 500, "lastHours": 6019}, {"id": "ccom-3ff5220d", "name": "Luftfilter", "kind": "service", "desc": "Sjekke luftfilter, skiftes v/ skade eller dersom det begynner å bli tett", "interval": 1000, "lastHours": 5190}, {"id": "ccom-ae42fa4b", "name": "Kjølesystem", "kind": "service", "desc": "Tappe ned kjølevæske, flushe system m/ ferskvann, fylle på ny kjølevæske\nCool-gard 2 kjølevæske har levetid på 6000 timer.", "interval": 6000, "lastHours": 6000}, {"id": "ccom-1e0557d5", "name": "Skifte forfilter og finfilter", "kind": "service", "desc": "Skifte dieselfilter (fin- og forfilter)", "interval": 1000, "lastHours": 4967}, {"id": "ccom-b0aebda9", "name": "Sjøvannspumpe", "kind": "inspeksjon", "desc": "Kontroll og sjekk av sjøvannspumpe, skifte impeller v/ slitasje og skader.", "interval": 1000, "lastHours": 4967}, {"id": "ccom-5b4896ea", "name": "Smøreoljesystem", "kind": "service", "desc": "Skifte smøreolje og filter", "interval": 500, "lastHours": 5639}, {"id": "ccom-5b56d9d9", "name": "Tappe ut av vannutskiller-forfilter", "kind": "inspeksjon", "desc": "Tappe ut vann fra vannutskiller-forfilter\n24mm fastnøkkel passer til bolten.", "interval": 500, "lastHours": 5660}]}, {"id": "ccom-1d90e60a", "name": "Propell anlegg", "icon": "🛥️", "group": "Fremdrift", "model": "SFI 63", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": null, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-07b1c456", "name": "Sjekk oljenivå på baugthruster", "kind": "inspeksjon", "desc": "Sjekk oljenivået på hylsetank til baugthruster", "intervalDays": 19, "lastDate": "2026-10-18"}]}, {"id": "ccom-b73d5f97", "name": "Azipod bb", "icon": "🛥️", "group": "Fremdrift", "model": "SFI 634.01", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": {"hours": 3603, "date": "2026-11-02"}, "avgPerDay": 2, "entries": [], "created": 0, "jobs": [{"id": "ccom-30f1baff", "name": "Månedlig", "kind": "inspeksjon", "desc": "Sjekk oljenivå på styreenhet\nSjekk fargen til \"conditioner granules\" på oljetanken, skiftes dersom de er blitt oransje \nSe manual fra AAA Propulsion (att. 6 og 7)", "intervalDays": 30, "lastDate": "2026-10-04"}, {"id": "ccom-1ed753b4", "name": "Visuell inspeksjon", "kind": "inspeksjon", "desc": "Visuell inspeksjon av azipod hode (innvendig) og vakuum pumpe\nSe manual fra AAA-propulsion", "intervalDays": 14, "lastDate": "2026-10-16"}, {"id": "ccom-f2a46078", "name": "5 årlig service", "kind": "service", "desc": "Skifte alle radiale akseltetninger\nSjekk foringer, skiftes dersom nødvendig\nSjekk mekaniske tetninger for slitasje og skader, skiftes dersom nødvendig\nSe manual fra AAA Propulsion (att. 5)", "interval": 20000, "lastHours": 0}, {"id": "ccom-63059892", "name": "Årlig service", "kind": "service", "desc": "Oljeskift på A-pod\nOljeskift på styreenheter\nOljeskift på tetningssystem\nSkifte oljefilter og vakuumfilter for smøre- og luftesystem\nSkifte diaphragm (\"\"mellomgulvet\"\") og ventilplater/tetninger for membranpumpen\nSjekk trykknivå for tetningssystem (barrier fluid system) skifte nitrogen (N2) flaske dersom trykket er for lavt på flaskesiden\nSe manual fra AAA Propulsion (att. 7)", "interval": 6000, "lastHours": 0}, {"id": "ccom-1a0c8d2e", "name": "10 årlig service", "kind": "service", "desc": "Skifte alle radiale akseltetninger\nSjekk foringer, skiftes dersom nødvendig\nSjekk mekaniske tetninger for slitasje og skader, skiftes dersom nødvendig\nSe manual fra AAA Propulsion (att. 5)", "interval": 40000, "lastHours": 0}, {"id": "ccom-5c637eda", "name": "3 månedlig service", "kind": "service", "desc": "Oljeprøve v/ driftstemperatur\nGrease rotasjonsgir (EP-2 grease)\nGrease radiale akseltetninger (under inspeksjonsluke) (EP-2 grease)\nSjekk hydrauliske slanger og elektriske kabler for slitasje og skader.\nSe manual fra AAA-propulsion (att. 6 og §4.6)", "intervalDays": 90, "lastDate": "2026-10-17"}]}, {"id": "ccom-88a65e7d", "name": "Azipod stb.", "icon": "🛥️", "group": "Fremdrift", "model": "SFI 634.02", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": {"hours": 3433, "date": "2026-11-02"}, "avgPerDay": 2, "entries": [], "created": 0, "jobs": [{"id": "ccom-cf488d74", "name": "Månedlig kontroll", "kind": "service", "desc": "Sjekk oljenivå på styreenhet\nSjekk fargen til \"conditioner granules\" på oljetanken, skiftes dersom de er blitt oransje \nSe manual fra AAA Propulsion (att. 6 og 7)", "intervalDays": 30, "lastDate": "2026-10-04"}, {"id": "ccom-ae6485e2", "name": "Visuell inspeksjon", "kind": "service", "desc": "Visuell inspeksjon av azipod hode (innvendig) og vakuum pumpe\nSe manual fra AAA-propulsion", "intervalDays": 14, "lastDate": "2026-10-16"}, {"id": "ccom-de9b5738", "name": "3 måneders service", "kind": "service", "desc": "Oljeprøve v/ driftstemperatur\nGrease rotasjonsgir (EP-2 grease)\nGrease radiale akseltetninger (under inspeksjonsluke) (EP-2 grease)\nSjekk hydrauliske slanger og elektriske kabler for slitasje og skader.\nSe manual fra AAA-propulsion (att. 6 og §4.6)", "intervalDays": 90, "lastDate": "2026-10-17"}, {"id": "ccom-78dfae54", "name": "Årlig service", "kind": "service", "desc": "Oljeskift på A-pod\nOljeskift på styreenheter\nOljeskift på tetningssystem\nSkifte oljefilter og vakuumfilter for smøre- og luftesystem\nSkifte diaphragm (\"\"mellomgulvet\"\") og ventilplater/tetninger for membranpumpen\nSjekk trykknivå for tetningssystem (barrier fluid system) skifte nitrogen (N2) flaske dersom trykket er for lavt på flaskesiden\nSe AAA Propulsion manual (att. 7)", "interval": 6000, "lastHours": 0}, {"id": "ccom-8eddc162", "name": "10 årlig service", "kind": "service", "desc": "Skifte alle hydrauliske slanger\nSkifte alle lager", "interval": 40000, "lastHours": 0}, {"id": "ccom-f546a4c0", "name": "5 årlig service", "kind": "service", "desc": "Skifte alle radiale akseltetninger\nSjekk foringer, skiftes dersom nødvendig\nSjekk mekaniske tetninger for slitasje og skader, skiftes dersom nødvendig\nSe manual fra AAA Propulsion (att. 5)", "interval": 20000, "lastHours": 0}]}, {"id": "ccom-caa2bc14", "name": "Bunnpluggar, sjøkasser, lensebrønner, vassjet inntak", "icon": "⚓", "group": "Utstyr og systemer", "model": "SFI 262", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": null, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-5b0b96a7", "name": "5 årlig kontroll på over bord ventiler og sjøvannsinntak", "kind": "inspeksjon", "desc": "Ventiler til over bord og sjøvannstinntak sjekkes, enten ved å løsne ventiler og sjekke eller med kamera.\nMå gjøres en gang i løpet av 5 år.", "intervalDays": 1825, "lastDate": "2026-06-10"}]}, {"id": "ccom-6139788b", "name": "Kran forut", "icon": "🏗️", "group": "Utstyr og systemer", "model": "SFI 331.01", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": null, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-a8ebade8", "name": "Sjekk slanger og koblinger", "kind": "service", "desc": "Sjekk alle slanger og kuplinger for skader, slitasje og lekkasje.", "intervalDays": 21, "lastDate": "2026-10-29"}]}, {"id": "ccom-3842127c", "name": "Spesialutstyr", "icon": "🤖", "group": "Utstyr og systemer", "model": "SFI 48", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": null, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-53a0611f", "name": "100 timers service på ROV", "kind": "service", "desc": "100 timers service på ROV\nSjekk kompensatorer og aktuatorer for olje. Etterfyll om nødvendig\nSjekk kinafinger på kabel. Sjekk koblingspunkt for kabel på ROV\nIsolasjonstest/jordfeiltest på thrustere, trafo, lys og aktuator", "intervalDays": 90, "lastDate": "2026-10-16"}, {"id": "ccom-e49fc1f9", "name": "250 timers service på ROV", "kind": "service", "desc": "250 timers service på ROV\nSjekk kompensatorer og aktuatorer for olje. Etterfyll om nødvendig\nSjekk kinafinger på kabel. Sjekk koblingspunkt for kabel på ROV\nIsolasjonstest/jordfeiltest på thrustere, trafo, lys og aktuator\nIsolasjonstest/jordfeiltest av kabler\nGrease alle connectorer med molykote 44\nåæpø+----------------------------------------------------------------------\nDrener trafo, sidethruster, og tether koblingsboks for olje og fyll på.\nSjekk ROV rammeverk og flottør for skader\nTest thruster power cut off (?)\nRengjør membranhus og simmerring på thruster\nSmør bolter til elektronikkflasker. Bruk aqua lube.", "intervalDays": 180, "lastDate": "2026-07-16"}, {"id": "ccom-5b5a3b8f", "name": "500 timers service på ROV", "kind": "service", "desc": "500 timers service på ROV\nSjekk kompensatorer og aktuatorer for olje. Etterfyll om nødvendig\nSjekk kinafinger på kabel. Sjekk koblingspunkt for kabel på ROV\nIsolasjonstest/jordfeiltest på thrustere, trafo, lys og aktuator\nIsolasjonstest/jordfeiltest av kabler\nGrease alle connectorer med molykote 44\nåæpø+----------------------------------------------------------------------\nDrener trafo, sidethruster, og tether koblingsboks for olje og fyll på.\nSjekk ROV rammeverk og flottør for skader\nTest thruster power cut off (?)\nRengjør membranhus og simmerring på thruster\nSmør bolter til elektronikkflasker. Bruk aqua lube\nBytt olje på thrustere, bruk silicon olje AK20\nBytt simmerring og lager\nBytt olje i aktuatorer. Bruk CRC 3-36, WD-40 eller CRC 5-56\nBytt olje på trafo og sidethruster", "intervalDays": 730, "lastDate": "2026-07-16"}, {"id": "ccom-cd53b348", "name": "1000 timers service på ROV", "kind": "service", "desc": "1000 timers service på ROV\nSjekk kompensatorer og aktuatorer for olje. Etterfyll om nødvendig\nSjekk kinafinger på kabel. Sjekk koblingspunkt for kabel på ROV\nIsolasjonstest/jordfeiltest på thrustere, trafo, lys og aktuator\nIsolasjonstest/jordfeiltest av kabler\nGrease alle connectorer med molykote 44\nåæpø+----------------------------------------------------------------------\nDrener trafo, sidethruster, og tether koblingsboks for olje og fyll på.\nSjekk ROV rammeverk og flottør for skader\nTest thruster power cut off (?)\nRengjør membranhus og simmerring på thruster\nSmør bolter til elektronikkflasker. Bruk aqua lube\nBytt olje på thrustere, bruk silicon olje AK20\nBytt simmerring og lager\nBytt olje i aktuatorer. Bruk CRC 3-36, WD-40 eller CRC 5-56\nBytt olje på trafo og sidethruster\nHovedservice hos Sperre", "intervalDays": 1460, "lastDate": "2026-07-16"}]}, {"id": "ccom-25fc7b07", "name": "System for maskin hovedkomponentar", "icon": "⚙️", "group": "Utstyr og systemer", "model": "SFI 7", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": null, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-6bbbc523", "name": "Rengjør sil til sjøvannsinntak", "kind": "inspeksjon", "desc": "Rengjør begge siler til sjøvannsinntak til brannsystem, bilge og ballast", "intervalDays": 30, "lastDate": "2026-10-03"}]}, {"id": "ccom-ddce69f5", "name": "Brennstoff systems", "icon": "⛽", "group": "Utstyr og systemer", "model": "SFI 70", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": null, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-37ae0757", "name": "Test av hurtiglukkere til dagtanker", "kind": "inspeksjon", "desc": "Test at hurtiglukkere virker som de skal. Sylindere på ventiler ved dagtanker skal dras ut når du løser ut hurtiglukker. \nVentiler åpnes etter test, og sylinder setter seg på plass når du setter på plass hurtiglukkerventil på¨ dekk.", "intervalDays": 150, "lastDate": "2026-06-10"}]}, {"id": "ccom-794b14cc", "name": "Kjølesystem", "icon": "❄️", "group": "Utstyr og systemer", "model": "SFI 72", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": null, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-8a40ed40", "name": "Rengjør sil ved sjøvannsinntak til AFE kjøler", "kind": "inspeksjon", "desc": "Rengjør sil ved sjøvannsinntak til AFE og ved hydrolikk kjølepumpe.", "intervalDays": 30, "lastDate": "2026-10-25"}, {"id": "ccom-5d5bebfb", "name": "Tørne ventiler", "kind": "service", "desc": "Tørne alle ventiler som hører til følgende komponenter: Kjølesystem motorer, hoved ventiler sjøkiste, brannpumpe/ballast/lense pumper, overbord ventiler!", "intervalDays": 49, "lastDate": "2026-10-18"}]}, {"id": "ccom-9b67b798", "name": "Atlas Copco kompressor", "icon": "🌬️", "group": "Utstyr og systemer", "model": "SFI 733.01", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": null, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-a3e413cd", "name": "Drener vann fra trykkluftstank", "kind": "inspeksjon", "desc": "Åpne bunnventil på trykkluftstank og tøm for vann. Bør gjøres ved lavt trykk på tank og kompressor slått av.", "intervalDays": 90, "lastDate": "2026-09-08"}, {"id": "ccom-1d48f1c1", "name": "Åpne opp og kontroller tank", "kind": "inspeksjon", "desc": "Åpne opp og kontroller trykkluftstank for rust og vann.\nTøm tank for luft først og åpne inspeksjonsluke. Vask tankens innside om nødvendig, drener med bunnplugg.", "intervalDays": 365, "lastDate": "2026-06-11"}, {"id": "ccom-0f6c6297", "name": "5-årlig trykktest av overtrykksventil", "kind": "service", "desc": "Trykktest overtrykksventil på toppen av trykkluftstank. Dette må gjøres av servicefolk. Dokumenteres.", "intervalDays": 1826, "lastDate": "2026-06-11"}]}, {"id": "ccom-030a2003", "name": "Hydrolikksystem", "icon": "🛢️", "group": "Utstyr og systemer", "model": "SFI 74", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": null, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-c939808c", "name": "Sjekk granulefilter", "kind": "inspeksjon", "desc": "Sjekk granulefilter oppå hydrolikktank. Er merket på filter kordan det ser ut når det er oppbrukt.", "intervalDays": 30, "lastDate": "2026-10-03"}, {"id": "ccom-33e8e1de", "name": "Sjekke Supp line filter", "kind": "inspeksjon", "desc": "Sjekk Supp line filter. Les av trykk eller se på EMS at det ikkje ligger alarmer inne under bruk.\nOm alarmer ikkje går vekk må supp line filteret byttes.", "intervalDays": 14, "lastDate": "2026-10-25"}, {"id": "ccom-eb3daf75", "name": "Sjekke returfilter på hydrolikk", "kind": "inspeksjon", "desc": "Les av trykk på returen, eller sjekk EMS for alarmer.\nVed alarm bør filteret byttes.", "intervalDays": 14, "lastDate": "2026-10-30"}]}, {"id": "ccom-5cc66498", "name": "Lensesystem", "icon": "💧", "group": "Utstyr og systemer", "model": "SFI 803", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": null, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-74d351fc", "name": "Test av lensealarmer v/aktivering av flottør", "kind": "inspeksjon", "desc": "Test alle lensealarmer ved aktivering av flottør\nTOTALT 6 STK\nBatteri Room\nFWD Tech Room SB\nFWD Tech Room PS\nTech Room \nPropulsion Room\nEngine Room Center", "intervalDays": 21, "lastDate": "2026-10-18"}]}, {"id": "ccom-10197d89", "name": "Aerosol brannslukkeanlegg", "icon": "🧯", "group": "Utstyr og systemer", "model": "SFI 815.01", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": null, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-9909f743", "name": "Fornye", "kind": "service", "desc": "Fornye Aerosol anlegget etter 15 år. Ref. email fra Nortronik\n**\nTakk for det, men det viser seg att det ikkje er krav om sjekk av denne typen anlegg, då dette er eit lukka system med 15 års varigheit.\nMed vennlig hilsen \nStig Arve Holsen Foss\nServicekoordinator \nNortronik AS, Flovegen 12, 6800 Førde\nTel: +47 57 83 20 00, Mob: + 47 99 25 82 76\nwww.nortronik.com", "intervalDays": 5478, "lastDate": "2020-01-02"}, {"id": "ccom-52818683", "name": "Årlig kontroll av Aerosol brannslukkeanlegg", "kind": "service", "desc": "5 Service \n5.1 Testing av installasjonen All FS12-installasjon må testes for å bekrefte aktiveringen av aerosolgeneratorer er mulig. Aerosolgeneratorene vil faktisk ikke bli aktivert, men installasjonens evne til å gjøre det vil bli verifisert ved å koble til en testenhet (vanligvis en pære, f.eks. 24V/5W) til aerosolgeneratorterminalene (2.1) i underenheten(e). Husk å koble fra aerosolgeneratorene før du utfører en installasjonstest! \n1. Slå av begge strømforsyningene \n2. Koble fra alle aerosolgeneratorer \n3. Slå på begge strømforsyningene \n4. Kontroller at \"Sub unit fault\" er indikert på frontpanelet til hovedenheten. \n5. Snu dekselet til aktiveringsknappen. \n6. Vri på aktiveringsknappen. \n7. Kontroller at ventilasjonen i det beskyttede området er slått av. \n8. Kontroller at alle installerte alarmenheter for aerosolfrigjøring er aktivert. \n9. Kontroller at hovedenhetens interne summer piper (1.9) og at hovedenheten enhet ”System frigitt”-indikator (1.2) blinker. \n10. Vent tiden angitt som \"aktiveringsforsinkelse\" under installasjonen. \n11. Kontroller at den interne summeren (1.9) er permanent på og at ”System frigitt”-indikatoren (1.2) lyser permanent. \n12. Koble testenheten (pæren) til aerosolgeneratorterminalene i hver underenhet én etter én. \n13. Kontroller at testpæren lyser når den er koblet til en underenhet. (Avhengig på strømmen som trekkes av testenheten/pæren, kan testenheten/pæren være permanent på (strøm < 0,5A) eller slått av etter 0,5 s (strøm > 0,5A) \n14. Kontroller at ventilasjonen i det beskyttede området kan startes på nytt av ved å trykke på knappen \"Start ventilasjon på nytt\". \n15. Slå av begge strømforsyningene. \n16. Slutt på prøven.", "intervalDays": 365, "lastDate": "2026-04-25"}, {"id": "ccom-828beafd", "name": "Månedlig visuell kontroll av Aerosolanlegg", "kind": "inspeksjon", "desc": "Aerosol slokkesystemer skal gjennomgå årlig kontroll utført av sertifisert personell med nødvendig test- og måleutstyr.\nDersom et fartøy ønsker månedlig egenkontroll, kan mannskapet utføre et begrenset sett med visuelle og funksjonelle\nsjekkpunkter som ikke krever sertifisering. Månedlig kontroll bør omfatte verifisering av at kontrollpanelet er operativt\nuten feilindikasjoner, at skilter og instrukser er korrekt plassert og lesbare, samt at kabling og aerosolgeneratorer er\nintakte og uten synlige skader.\nMånedlige sjekkpunkter for mannskap\n• Kontrollpanel — Panelet skal være operativt, uten feilmeldinger eller avvik.\n• Skilter og instrukser — Sjekk at alle skilter, merkinger og prosedyrer er på plass, lesbare og i henhold til systemets plassering.\n• Kabling — Kontroller at kabler er korrekt festet, uten brudd, slitasje eller korrosjon.\n• Aerosolgeneratorer — Sjekk at generatorene er fysisk intakte, uten skader, deformasjoner eller tegn til påvirkning fra varme eller fukt", "intervalDays": 30, "lastDate": "2026-10-30"}]}, {"id": "ccom-edef7413", "name": "Elektrisk forsyning", "icon": "🔌", "group": "Utstyr og systemer", "model": "SFI 86", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": null, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-2cf88985", "name": "Ukentlig Visuell Kontroll av batterirom", "kind": "inspeksjon", "desc": "At Daglig sjekkliste er utført.\nSjekk at rommet er tørt og rent\nSjekk at det ikke er feilmeldiger på BCU eller MCS på batterirom\nSjekk SOH i MCS\nvisuell kontroll av kabler\nSjekke at det ikke finner løst utstyr verktøy.\nUkentlig kontroll av Batteri rom.\nRyddig.\nMiljøforhold, ingen salt eller vann\nSjekke temperatur og gass verdier i MCS\nIngen lekkasjer.\nstatus lys på Batteri moduler.\nFeilmeldinger på kontroll panel. BCU\nDrenere kondensvann fra eksos batteri", "intervalDays": 7, "lastDate": "2026-10-30"}, {"id": "ccom-e6f69dac", "name": "Måndentlig kontroll batterirom", "kind": "inspeksjon", "desc": "se manual\nVisuell inspeksjon (1.2.1)\nTemperaturovervåkning(1.2.3)\n Nødstopp(1.2.7), Miljøforhold (1.2.11)\nInntrenging av sjøvann (1.2.12)\n avlesning av SOH (1.3.1).\nUtfør selvkontroll av gass detektor, se vedlagt dokument\nSjekk av batterirom - Kontroll av miljø, sjekk av fuktighet eller inntrenging av sjøvann. \n• Verifisere at batterirommet er beskyttet mot inntrenging av sjøvann gjennom åpninger, inkludert ventilasjonsinntak og -utløp (ref. arrangement plan for batterirommet).\n• Vurdere mulige lekkasjepunkter, inkludert ventilasjonsåpninger. Gjennomføre tiltak ved behov.\n• Vurder tilstand på rørgjennomføringer i batterirommet. Tilstand må være slik at de ikke utgjør en fare ved lekkasje. Mulige lekkasjepunkter i rør med saltvann må sikres dersom de kan påvirke batterisystemet.\n• Vurdere miljøforholdene i batterirommet (som temperatur, saltavleiring og fuktighet), da dårlige miljøforhold kan skade batteriene.\n• Kontakte batterileverandør hvis det finnes spor av salt eller fuktighet i batterirommet. Det må da gjøres et fysisk tilsyn av batterileverandør for å kontrollere tilstanden på batteriene. Rapporten fra dette tilsynet skal sendes inn til Sjøfartsdirektoratet.", "intervalDays": 30, "lastDate": "2026-10-04"}, {"id": "ccom-7527b96f", "name": "SOH TEST AV BATTERIPAKKE", "kind": "service", "desc": "Full SoH (state of health), skal foreligge testrapport og stemme med SOH indikering på MCS system \nLevrandør fjord maritime vil utføre denne i samarbeid med batterileverandør est-floatech", "intervalDays": 1826, "lastDate": "2026-06-07"}]}, {"id": "ccom-48569334", "name": "Elektriske forbrukere / systemer", "icon": "🔌", "group": "Utstyr og systemer", "model": "SFI 89", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": null, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-9be5fe55", "name": "Megging av hovedtavler og motorer", "kind": "service", "desc": "Kontakt eksternt firma for megging av elektrisk anlegg", "intervalDays": 62, "lastDate": "2027-03-31"}, {"id": "ccom-e3fdd0d3", "name": "Visuell kontroll av skipets elektriske komponenter", "kind": "inspeksjon", "desc": "Visuell kontroll skipets elektriske komponenter for å avdekke feil eller mangler som f. eks. koblingsbokser, lysarmatur, kabling elektromotorer.", "intervalDays": 365, "lastDate": "2026-01-20"}, {"id": "ccom-7f1d6256", "name": "Kontroller jordfeilmålere", "kind": "inspeksjon", "desc": "Kontroller jordfeilmålere om bord.", "intervalDays": 90, "lastDate": "2026-09-07"}, {"id": "ccom-67b0be1b", "name": "Gjennomgang av kursfortegnelser", "kind": "service", "desc": "Ha en gjennomgang av kursfortegnelser om bord for å verifisere at de er korrekt oppført.", "intervalDays": 365, "lastDate": "2026-08-07"}]}];
   const TYPES = [
     ['maskinrunde','🔄 Maskinrunde'],['service','🛠️ Service'],['vedlikehold','🔧 Vedlikehold'],['oljefyll','🫗 Fylt olje'],['hendelse','⚠️ Hendelse'],['olje','🛢️ Oljeskift'],['reparasjon','🔧 Reparasjon'],
     ['feil','⚠️ Feil / avvik'],['inspeksjon','🔍 Kontroll'],['drivstoff','⛽ Drivstoff'],
@@ -349,13 +362,26 @@
   // ---------- Lagring ----------
   const clone = o => JSON.parse(JSON.stringify(o));
   let db = load();
+  // Legger til maskiner og jobber fra CCOM som mangler – rører ikke det som allerede finnes
+  function mergeSeed(d){
+    let nm = 0, nj = 0;
+    for (const sm of SEED){
+      const ex = d.machines.find(m => m.id === sm.id);
+      if (!ex){ d.machines.push(fix(clone(sm))); nm++; nj += sm.jobs.length; continue; }
+      if (!ex.group) ex.group = sm.group;
+      for (const sj of sm.jobs) if (!ex.jobs.some(j => j.id === sj.id)){ ex.jobs.push(clone(sj)); nj++; }
+    }
+    return { nm, nj };
+  }
   function fix(m){ m.entries = Array.isArray(m.entries) ? m.entries : []; m.jobs = Array.isArray(m.jobs) ? m.jobs : []; m.id = m.id || uid(); return m; }
   function load(){
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw){ const d = JSON.parse(raw); if (d && Array.isArray(d.machines)){ d.machines.forEach(fix); d.general = Array.isArray(d.general) ? d.general : []; return d; } }
+      if (raw){ const d = JSON.parse(raw); if (d && Array.isArray(d.machines)){ d.machines.forEach(fix); d.general = Array.isArray(d.general) ? d.general : [];
+        if ((d.seedVersion || 1) < SEED_VERSION){ mergeSeed(d); d.seedVersion = SEED_VERSION; try { localStorage.setItem(KEY, JSON.stringify(d)); } catch(e){} }
+        return d; } }
     } catch(e){}
-    return { machines: clone(SEED).map(fix), general: [] };
+    return { machines: clone(SEED).map(fix), general: [], seedVersion: SEED_VERSION };
   }
   function save(){
     try { localStorage.setItem(KEY, JSON.stringify(db)); }
@@ -368,6 +394,7 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const fmtDate = s => { if(!s) return ''; const [y,m,d] = s.split('-'); return `${+d}.${+m}.${y}`; };
   const fmtH = h => h == null ? '–' : (Math.round(h*10)/10).toLocaleString('no-NO');
+  const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 864e5);
   const MONTHS = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
 
   // ---------- Beregninger ----------
@@ -380,27 +407,46 @@
   }
   const currentHours = m => meterInfo(m).hours;
 
+  const isDayJob = j => j.intervalDays != null;
   function jobState(m, j){
+    let next, left, cls, text, est = '', used, warnAt;
+    if (isDayJob(j)){
+      const iv = j.intervalDays, last = j.lastDate || today();
+      next = addDays(last, iv); left = daysBetween(today(), next);
+      // Varsel: 20 % av intervallet (10 % fra ett år og oppover), maks 30 dager før
+      warnAt = Math.min(iv * (iv >= 365 ? 0.10 : 0.20), 30);
+      text = left < 0 ? `${-left} d over` : left === 0 ? 'i dag' : `om ${left} d`;
+      used = Math.min(1, Math.max(0, daysBetween(last, today()) / iv));
+      cls = left < 0 ? 'bad' : left <= warnAt ? 'warn' : 'ok';
+      return { next, left, cls, text, est, used, day: true, rank: ({bad:0,warn:1,ok:2})[cls] * 10 + left / iv };
+    }
     const cur = currentHours(m) ?? 0;
-    const next = (j.lastHours || 0) + j.interval;
-    const left = next - cur;
+    next = (j.lastHours || 0) + j.interval;
+    left = next - cur;
     // Varsel: 10 % av intervallet for jobber på 500 t eller mer, 20 % for kortere intervall
-    const warnAt = j.interval * (j.interval >= 500 ? 0.10 : 0.20);
-    const cls = left < 0 ? 'bad' : left <= warnAt ? 'warn' : 'ok';
-    let est = '';
+    warnAt = j.interval * (j.interval >= 500 ? 0.10 : 0.20);
+    cls = left < 0 ? 'bad' : left <= warnAt ? 'warn' : 'ok';
     const avg = num(m.avgPerDay), mi = meterInfo(m);
     if (avg > 0 && left > 0 && mi.date){
       const d = new Date(mi.date + 'T12:00:00'); d.setDate(d.getDate() + Math.round(left / avg));
       est = `~${d.getDate()}. ${MONTHS[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? ' ' + d.getFullYear() : ''}`;
       if (d.toISOString().slice(0,10) < today()) est += ', trolig passert';
     }
-    const text = left < 0 ? `${fmtH(-left)} t over` : `om ${fmtH(left)} t`;
-    const used = Math.min(1, Math.max(0, (cur - (j.lastHours || 0)) / j.interval));
-    return { next, left, cls, text, est, used };
+    text = left < 0 ? `${fmtH(-left)} t over` : `om ${fmtH(left)} t`;
+    used = Math.min(1, Math.max(0, (cur - (j.lastHours || 0)) / j.interval));
+    return { next, left, cls, text, est, used, day: false, rank: ({bad:0,warn:1,ok:2})[cls] * 10 + left / j.interval };
+  }
+  const jobWhen = (j, s) => s.day ? `Forfaller ${fmtDate(s.next)}` : `Forfaller ved ${fmtH(s.next)} t${s.est ? ' (' + s.est + ')' : ''}`;
+  const jobEvery = j => isDayJob(j) ? everyDays(j.intervalDays) : `Hver ${fmtH(j.interval)} t`;
+  function everyDays(d){
+    if (d % 365 === 0 || d === 1826 || d === 1825 || d === 5478) return d >= 730 ? `Hvert ${Math.round(d/365)}. år` : 'Hvert år';
+    if (d === 7) return 'Hver uke'; if (d === 14) return 'Annenhver uke';
+    if (d >= 28 && d <= 31) return 'Hver måned'; if (d >= 89 && d <= 92) return 'Hver 3. måned'; if (d >= 180 && d <= 183) return 'Hvert halvår';
+    return `Hver ${d}. dag`;
   }
   function machineAlert(m){
     if (!m.jobs.length) return null;
-    const st = m.jobs.map(j => ({j, s: jobState(m,j)})).sort((a,b) => a.s.left - b.s.left);
+    const st = m.jobs.map(j => ({j, s: jobState(m,j)})).sort((a,b) => a.s.rank - b.s.rank);
     const over = st.filter(x => x.s.left < 0).length, soon = st.filter(x => x.s.cls === 'warn').length;
     if (over) return {cls:'bad', text:`${over} jobb${over>1?'er':''} forfalt`};
     if (soon) return {cls:'warn', text:`${soon} jobb${soon>1?'er':''} snart – ${st[0].j.name} ${st[0].s.text}`};
@@ -408,7 +454,7 @@
   }
   function dueJobs(){
     return db.machines.flatMap(m => m.jobs.map(j => ({m, j, s: jobState(m,j)})))
-      .filter(x => x.s.cls !== 'ok').sort((a,b) => a.s.left - b.s.left);
+      .filter(x => x.s.cls !== 'ok').sort((a,b) => a.s.rank - b.s.rank);
   }
   const sortEntries = arr => [...arr].sort((a,b) => b.date.localeCompare(a.date) || (b.time||'').localeCompare(a.time||'') || ((b.hours??0)-(a.hours??0)) || ((b.created||0)-(a.created||0)));
   const allEntries = () => [
@@ -436,12 +482,15 @@
 
   function render(){
     $('tabJournal').classList.toggle('on', state.tab === 'journal');
-    $('tabMachines').classList.toggle('on', state.tab !== 'journal');
+    $('tabJobs').classList.toggle('on', state.tab === 'jobs');
+    $('fab').hidden = state.tab === 'jobs';
+    $('tabMachines').classList.toggle('on', state.tab === 'machines');
     const due = dueJobs(), over = due.filter(x => x.s.cls === 'bad').length;
     const bb = $('bellBadge');
     bb.hidden = !due.length; bb.textContent = due.length; bb.className = 'hbadge' + (over ? '' : ' warn');
     const m = curMachine();
     if (state.tab === 'journal') return renderJournal();
+    if (state.tab === 'jobs') return renderJobs();
     if (!m) { state.machineId = null; renderList(); } else renderMachine(m);
   }
 
@@ -476,6 +525,47 @@
     view.innerHTML = html;
     bindSearch();
   }
+  const GROUPS = ['Motorer','Fremdrift','Utstyr og systemer'];
+  function renderJobs(){
+    titleEl.textContent = 'Jobber';
+    backBtn.hidden = true; editMachineBtn.hidden = true;
+    const f = state.filter || 'alle', q = state.q.trim().toLowerCase();
+    let all = db.machines.flatMap(m => m.jobs.map(j => ({m, j, s: jobState(m,j)})));
+    const counts = { snart: all.filter(x => x.s.cls !== 'ok').length };
+    if (f === 'snart') all = all.filter(x => x.s.cls !== 'ok');
+    else if (f !== 'alle') all = all.filter(x => (x.m.group || 'Motorer') === f);
+    if (q) all = all.filter(x => (x.j.name + ' ' + x.m.name).toLowerCase().includes(q));
+    all.sort((a,b) => a.s.rank - b.s.rank);
+    const chip = (v, l) => `<button class="chip ${f===v?'on':''}" data-f="${v}">${l}</button>`;
+    view.innerHTML = `
+      <div class="chips">${chip('alle','Alle')}${chip('snart',`Forfalt / snart (${counts.snart})`)}${GROUPS.map(g => chip(g,g)).join('')}</div>
+      <input class="search" id="search" type="search" placeholder="Søk i jobber …" value="${esc(state.q)}">
+      ${all.length ? all.map(({m,j,s}) => `
+        <div class="card job ${s.cls} jrow">
+          <div class="jbody" data-open="${m.id}" data-jid="${j.id}">
+            <b>${esc(j.name)}</b>
+            <span class="sub">${esc(m.name)} · ${jobEvery(j)}</span>
+            <span class="pill ${s.cls}" style="margin-top:4px">${s.text}</span>
+          </div>
+          <button class="qdone" data-qdone="${m.id}" data-jid="${j.id}" aria-label="Utført">✓</button>
+        </div>`).join('')
+        : `<div class="empty"><div class="big">✅</div><p>${f === 'snart' ? 'Ingen jobber forfaller snart.' : 'Ingen jobber.'}</p></div>`}`;
+    bindSearch();
+  }
+  // Hurtigutfør: ett trykk, kan angres
+  function quickDone(m, j){
+    const prev = { lastHours: j.lastHours, lastDate: j.lastDate };
+    const cur = currentHours(m);
+    const en = { id: uid(), created: Date.now(), jobId: j.id, date: today(), time: nowTime(),
+      hours: isDayJob(j) ? null : cur, type: j.kind || 'service', desc: '✓ ' + j.name, by: '', cost: null };
+    m.entries.push(en);
+    if (isDayJob(j)) j.lastDate = today(); else j.lastHours = cur ?? j.lastHours;
+    save(); render();
+    const s = jobState(m, j);
+    toast(`✓ ${j.name} – neste ${s.day ? fmtDate(s.next) : 'ved ' + fmtH(s.next) + ' t'}`, 'Angre', () => {
+      m.entries = m.entries.filter(x => x !== en); Object.assign(j, prev); save(); render(); toast('Angret');
+    });
+  }
   function bindSearch(){
     const s = document.getElementById('search');
     if (s) s.addEventListener('input', e => {
@@ -492,14 +582,17 @@
         <p><b>Ingen maskiner ennå</b></p><p>Trykk på <b>+</b> for å legge til den første maskinen din.</p></div>`;
       return;
     }
-    view.innerHTML = db.machines.map(m => {
+    let lastGrp = null;
+    const ordered = [...db.machines].sort((a,b) => GROUPS.indexOf(a.group || 'Motorer') - GROUPS.indexOf(b.group || 'Motorer'));
+    view.innerHTML = ordered.map(m => {
       const al = machineAlert(m);
       const mi = meterInfo(m);
-      return `<div class="card machine" data-id="${m.id}">
+      const g = m.group || 'Motorer'; const head = g !== lastGrp ? `<div class="grp">${g}</div>` : ''; lastGrp = g;
+      return head + `<div class="card machine" data-id="${m.id}">
         <div class="ico">${esc(m.icon || '⚙️')}</div>
         <div class="info">
           <div class="name">${esc(m.name)}</div>
-          <div class="sub">${fmtH(mi.hours)} t${mi.date ? ' (' + fmtDate(mi.date) + ')' : ''} · ${m.jobs.length} jobber · ${m.entries.length} i loggen</div>
+          <div class="sub">${mi.hours != null ? `${fmtH(mi.hours)} t${mi.date ? ' (' + fmtDate(mi.date) + ')' : ''} · ` : ''}${m.jobs.length} jobb${m.jobs.length===1?'':'er'} · ${m.entries.length} i loggen</div>
           ${al ? `<div style="margin-top:6px"><span class="pill ${al.cls}">${esc(al.text)}</span></div>` : ''}
         </div>
         <div class="sub">›</div></div>`;
@@ -516,23 +609,23 @@
     let list = sortEntries(m.entries);
     if (state.filter !== 'alle') list = list.filter(e => e.type === state.filter);
     if (q) list = list.filter(e => [e.desc, e.by, typeLabel(e.type)].join(' ').toLowerCase().includes(q));
-    const jobs = m.jobs.map(j => ({j, s: jobState(m,j)})).sort((a,b) => a.s.left - b.s.left);
+    const jobs = m.jobs.map(j => ({j, s: jobState(m,j)})).sort((a,b) => a.s.rank - b.s.rank);
 
     view.innerHTML = `
       <div class="stats">
-        <div class="stat btnlike" id="meterBtn"><b>${fmtH(mi.hours)}</b><span>timer · oppdater</span></div>
+        ${(mi.hours != null || m.jobs.some(j => !isDayJob(j))) ? `<div class="stat btnlike" id="meterBtn"><b>${fmtH(mi.hours)}</b><span>timer · oppdater</span></div>` : ''}
         <div class="stat"><b>${m.entries.length}</b><span>i loggen</span></div>
         <div class="stat"><b>${cost ? Math.round(cost).toLocaleString('no-NO') : '–'}</b><span>kr totalt</span></div>
       </div>
       ${mi.date ? `<p class="sub" style="margin:-4px 4px 4px">Timeteller sist oppdatert ${fmtDate(mi.date)}${num(m.avgPerDay) ? ` · snitt ${fmtH(num(m.avgPerDay))} t/døgn` : ''}</p>` : ''}
 
-      <h3>Jobber etter kjøretimer <button id="addJobBtn">+ Ny jobb</button></h3>
+      <h3>Jobber <button id="addJobBtn">+ Ny jobb</button></h3>
       ${jobs.length ? jobs.map(({j,s}) => `
         <div class="card job ${s.cls}" data-jid="${j.id}">
           <div class="top"><span class="jn">${esc(j.name)}</span><span class="pill ${s.cls}">${s.text}</span></div>
           <div class="meta">
-            <span>Forfaller ved ${fmtH(s.next)} t${s.est ? ' (' + s.est + ')' : ''}</span>
-            <span>Hver ${fmtH(j.interval)} t</span>
+            <span>${jobWhen(j,s)}</span>
+            <span>${jobEvery(j)}</span>
             <span>${j.kind === 'service' ? '🛠️ Service' : '🔍 Kontroll'}</span>
           </div>
           <div class="bar"><i style="width:${Math.round(s.used*100)}%"></i></div>
@@ -567,6 +660,8 @@
     const t = e.target;
     if (t.closest('#meterBtn')) return openMeterDlg();
     if (t.closest('#newDayBtn')) return newDay();
+    const qd = t.closest('[data-qdone]'); if (qd){ const m = machineById(qd.dataset.qdone); return quickDone(m, m.jobs.find(x => x.id === qd.dataset.jid)); }
+    const op = t.closest('[data-open]'); if (op){ const m = machineById(op.dataset.open); return openDoneDlg(m, m.jobs.find(x => x.id === op.dataset.jid)); }
     const qb = t.closest('[data-quick]'); if (qb){
       const p = QUICK[+qb.dataset.quick], mid = lastMachine(), m = machineById(mid);
       const en = { id: uid(), created: Date.now(), date: today(), time: nowTime(), type: p.type, desc: '', by: '', cost: null, hours: null };
@@ -583,7 +678,6 @@
   });
 
   function addDays(s, n){ const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0,10); }
-  const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 864e5);
   // Turnusdag (1..på) for en dato, eller null hvis fri / ingen turnus
   function turnusDay(date){
     const t = db.turnus; if (!t || !t.start || !t.on) return null;
@@ -628,6 +722,7 @@
     state = { tab: t, machineId: null, filter: 'alle', q: '' }; render(); window.scrollTo(0,0);
   }
   $('tabJournal').onclick = () => setTab('journal');
+  $('tabJobs').onclick = () => setTab('jobs');
   $('bellBtn').onclick = () => {
     const due = dueJobs();
     $('dueList').innerHTML = due.length ? due.map(x => `<div class="duerow" data-goto="${x.m.id}" data-jid="${x.j.id}">
@@ -721,22 +816,33 @@
     $('jobDelBtn').hidden = !j;
     if (j){
       jobForm.name.value = j.name; jobForm.kind.value = j.kind || 'service';
-      jobForm.interval.value = j.interval; jobForm.lastHours.value = j.lastHours ?? '';
+      jobForm.unit.value = isDayJob(j) ? 'd' : 'h';
+      jobForm.interval.value = isDayJob(j) ? j.intervalDays : j.interval;
+      jobForm.lastHours.value = j.lastHours ?? ''; jobForm.lastDate.value = j.lastDate || '';
       jobForm.desc.value = j.desc || '';
     } else {
       const cur = currentHours(m); if (cur != null) jobForm.lastHours.value = cur;
+      jobForm.unit.value = cur != null ? 'h' : 'd'; jobForm.lastDate.value = today();
     }
-    jobDlg.showModal();
+    jobUnitUI(); jobDlg.showModal();
   }
+  function jobUnitUI(){
+    const d = jobForm.unit.value === 'd';
+    $('ivLabel').textContent = d ? 'Intervall (dager) *' : 'Intervall (timer) *';
+    $('lastHWrap').style.display = d ? 'none' : ''; $('lastDWrap').style.display = d ? '' : 'none';
+  }
+  jobForm.unit.addEventListener('change', jobUnitUI);
   jobForm.addEventListener('submit', e => {
     e.preventDefault();
     const m = curMachine(); if (!m) return;
-    const f = jobForm, data = {
-      name: f.name.value.trim(), kind: f.kind.value, interval: num(f.interval.value),
-      lastHours: num(f.lastHours.value) ?? 0, desc: f.desc.value.trim()
-    };
-    if (!data.name || !data.interval) return;
-    if (editingJob) Object.assign(editingJob, data); else m.jobs.push({ id: uid(), ...data });
+    const f = jobForm, iv = num(f.interval.value), d = f.unit.value === 'd';
+    const data = { name: f.name.value.trim(), kind: f.kind.value, desc: f.desc.value.trim() };
+    if (!data.name || !iv) return;
+    if (d) Object.assign(data, { intervalDays: iv, lastDate: f.lastDate.value || today(), interval: undefined, lastHours: undefined });
+    else Object.assign(data, { interval: iv, lastHours: num(f.lastHours.value) ?? 0, intervalDays: undefined, lastDate: undefined });
+    const tgt = editingJob || { id: uid() };
+    Object.assign(tgt, data); Object.keys(tgt).forEach(k => tgt[k] === undefined && delete tgt[k]);
+    if (!editingJob) m.jobs.push(tgt);
     save(); jobDlg.close(); render(); toast('Jobb lagret');
   });
   $('jobDelBtn').onclick = async () => {
@@ -815,7 +921,8 @@
     const s = jobState(m, j);
     doneForm.reset();
     $('doneTitle').textContent = j.name;
-    $('doneSub').innerHTML = `${esc(m.name)} · <span class="pill ${s.cls}">${s.text}</span> · hver ${fmtH(j.interval)} t, sist ved ${fmtH(j.lastHours || 0)} t`;
+    $('doneSub').innerHTML = `${esc(m.name)} · <span class="pill ${s.cls}">${s.text}</span> · ${jobEvery(j).toLowerCase()}, sist ${isDayJob(j) ? (j.lastDate ? fmtDate(j.lastDate) : 'aldri') : 'ved ' + fmtH(j.lastHours || 0) + ' t'}`;
+    doneForm.hours.closest('div').style.display = isDayJob(j) && currentHours(m) == null ? 'none' : '';
     $('doneDesc').innerHTML = j.desc ? `<div class="jobdesc"><b>Dette skal gjøres:</b>\n${esc(j.desc)}</div>` : '';
     const cur = currentHours(m); doneForm.hours.value = cur ?? '';
     renderNoteChips();
@@ -851,11 +958,11 @@
     const h = num(doneForm.hours.value);
     const cur = currentHours(m);
     const note = doneForm.note.value.trim();
-    m.entries.push({ id: uid(), created: Date.now(), jobId: j.id, date: today(), time: nowTime(), hours: h, hoursMissing: h == null,
+    m.entries.push({ id: uid(), created: Date.now(), jobId: j.id, date: today(), time: nowTime(), hours: h, hoursMissing: h == null && !isDayJob(j),
       type: j.kind || 'service', desc: '✓ ' + j.name + (note ? '\n' + note : ''), by: doneForm.by.value.trim(), cost: null });
-    j.lastHours = h ?? cur ?? j.lastHours;
+    if (isDayJob(j)) j.lastDate = today(); else j.lastHours = h ?? cur ?? j.lastHours;
     if (note){ j.notes = [note, ...(j.notes || []).filter(x => x !== note)].slice(0, 8); }
-    save(); doneDlg.close(); render(); toast(`✓ ${j.name} utført – neste ved ${fmtH(j.lastHours + j.interval)} t`);
+    save(); doneDlg.close(); render(); { const s2 = jobState(m, j); toast(`✓ ${j.name} utført – neste ${s2.day ? fmtDate(s2.next) : 'ved ' + fmtH(s2.next) + ' t'}`); }
   });
   $('doneEditBtn').onclick = () => {
     const {m, j} = doneCtx || {}; if (!m) return;
@@ -941,7 +1048,7 @@
     from.splice(from.indexOf(editingEntry), 1); save(); entryDlg.close(); render(); toast('Slettet');
   };
 
-  $('fab').onclick = () => state.tab === 'journal' ? openEntryDlg(null, null, null) : state.machineId ? openEntryDlg(null) : openMachineDlg(null);
+  $('fab').onclick = () => (state.tab === 'journal' || state.tab === 'jobs') ? openEntryDlg(null, null, null) : state.machineId ? openEntryDlg(null) : openMachineDlg(null);
 
   // ---------- Meny ----------
   const menuDlg = $('menuDlg');
@@ -965,10 +1072,10 @@
     menuDlg.close(); toast('CSV lastet ned');
   };
   $('seedBtn').onclick = async () => {
-    const missing = SEED.filter(s => !db.machines.some(m => m.id === s.id));
-    if (!missing.length){ menuDlg.close(); return toast('Maskinene ligger allerede inne'); }
-    if (!await ask(`Legge inn ${missing.map(s => s.name).join(', ')} med jobber og kjøretimer fra CCOM (2.11.2026)?`, 'Legg inn')) return;
-    db.machines.push(...clone(missing).map(fix)); save(); menuDlg.close(); setTab('machines'); toast('Maskiner lagt inn');
+    const probe = clone(db); const r = mergeSeed(probe);
+    if (!r.nm && !r.nj){ menuDlg.close(); return toast('Alt fra CCOM ligger allerede inne'); }
+    if (!await ask(`Legge inn ${r.nm} maskiner/utstyr og ${r.nj} jobber fra CCOM (2.11.2026)? Det du har ført beholdes.`, 'Legg inn')) return;
+    mergeSeed(db); db.seedVersion = SEED_VERSION; save(); menuDlg.close(); setTab('jobs'); toast('Maskiner lagt inn');
   };
   const importFile = $('importFile');
   $('importBtn').onclick = () => importFile.click();
@@ -1040,12 +1147,13 @@
       h += '<h2>Timetellere og jobbstatus</h2>';
       for (const m of db.machines){
         const mi = meterInfo(m);
-        h += `<p style="margin:10pt 0 3pt"><b>${esc(m.name)}</b> – ${fmtH(mi.hours)} t${mi.date ? ` (${fmtDate(mi.date)})` : ''}${m.model ? ` · ${esc(m.model)}` : ''}</p>`;
+        h += `<p style="margin:10pt 0 3pt"><b>${esc(m.name)}</b>${mi.hours != null ? ` – ${fmtH(mi.hours)} t${mi.date ? ` (${fmtDate(mi.date)})` : ''}` : ''}${m.model ? ` · ${esc(m.model)}` : ''}</p>`;
         if (!m.jobs.length) continue;
-        h += '<table><thead><tr><th>Jobb</th><th class="num">Intervall</th><th class="num">Sist utført</th><th class="num">Forfaller ved</th><th class="num">Gjenstår</th></tr></thead><tbody>';
-        for (const {j,s} of m.jobs.map(j => ({j, s: jobState(m,j)})).sort((a,b) => a.s.left - b.s.left)){
-          h += `<tr><td>${esc(j.name)}</td><td class="num">${fmtH(j.interval)} t</td><td class="num">${fmtH(j.lastHours || 0)} t</td>
-            <td class="num">${fmtH(s.next)} t</td><td class="num ${s.cls === 'bad' ? 'over' : s.cls === 'warn' ? 'soon' : ''}">${s.left < 0 ? fmtH(-s.left) + ' t over' : fmtH(s.left) + ' t'}</td></tr>`;
+        h += '<table><thead><tr><th>Jobb</th><th class="num">Intervall</th><th class="num">Sist utført</th><th class="num">Forfaller</th><th class="num">Gjenstår</th></tr></thead><tbody>';
+        for (const {j,s} of m.jobs.map(j => ({j, s: jobState(m,j)})).sort((a,b) => a.s.rank - b.s.rank)){
+          const d = s.day;
+          h += `<tr><td>${esc(j.name)}</td><td class="num">${d ? jobEvery(j) : fmtH(j.interval) + ' t'}</td><td class="num">${d ? (j.lastDate ? fmtDate(j.lastDate) : '–') : fmtH(j.lastHours || 0) + ' t'}</td>
+            <td class="num">${d ? fmtDate(s.next) : fmtH(s.next) + ' t'}</td><td class="num ${s.cls === 'bad' ? 'over' : s.cls === 'warn' ? 'soon' : ''}">${s.text.replace(/^om /,'')}</td></tr>`;
         }
         h += '</tbody></table>';
       }
@@ -1080,7 +1188,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '3';
+  const APP_VERSION = '4';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
