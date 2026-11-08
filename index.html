@@ -405,7 +405,26 @@
     for (const e of m.entries) if (e.hours != null && (h == null || e.hours > h || (e.hours === h && e.date > (date||'')))){ h = e.hours; date = e.date; }
     return { hours: h, date };
   }
-  const currentHours = m => meterInfo(m).hours;
+  // Anslått timeteller på en dato: siste avlesning før/på datoen + snitt per døgn × dager siden
+  function readings(m){
+    const r = [];
+    if (num(m.startHours) != null) r.push({ h: num(m.startHours), d: '0000-01-01' });
+    if (m.meter && m.meter.hours != null) r.push({ h: m.meter.hours, d: m.meter.date || '0000-01-01' });
+    for (const e of m.entries) if (e.hours != null) r.push({ h: e.hours, d: e.date });
+    return r.sort((a,b) => a.d.localeCompare(b.d) || a.h - b.h);
+  }
+  const hasMeter = m => readings(m).length > 0;
+  function estHours(m, date){
+    const r = readings(m); if (!r.length) return null;
+    const before = r.filter(x => x.d <= date); const base = before.length ? before[before.length-1] : r[0];
+    const avg = num(m.avgPerDay) || 0;
+    const days = Math.max(0, daysBetween(base.d === '0000-01-01' ? date : base.d, date));
+    return { hours: Math.round((base.h + avg * days) * 10) / 10, estimated: avg > 0 && days > 0, readOn: base.d };
+  }
+  const readOnDate = (m, date) => m.entries.some(e => e.hours != null && e.date === date) || (m.meter && m.meter.date === date);
+  const shortName = m => m.name.replace(/ generator /i, ' ').replace(/ havneaggregat/i, '').replace(/\.$/, '');
+  // Til jobbstatus: anslått timeteller i dag (faller tilbake på siste avlesning)
+  const currentHours = m => { const e = estHours(m, today()); return e ? e.hours : null; };
 
   const isDayJob = j => j.intervalDays != null;
   function jobState(m, j){
@@ -426,9 +445,9 @@
     // Varsel: 10 % av intervallet for jobber på 500 t eller mer, 20 % for kortere intervall
     warnAt = j.interval * (j.interval >= 500 ? 0.10 : 0.20);
     cls = left < 0 ? 'bad' : left <= warnAt ? 'warn' : 'ok';
-    const avg = num(m.avgPerDay), mi = meterInfo(m);
-    if (avg > 0 && left > 0 && mi.date){
-      const d = new Date(mi.date + 'T12:00:00'); d.setDate(d.getDate() + Math.round(left / avg));
+    const avg = num(m.avgPerDay);
+    if (avg > 0 && left > 0){
+      const d = new Date(today() + 'T12:00:00'); d.setDate(d.getDate() + Math.round(left / avg));
       est = `~${d.getDate()}. ${MONTHS[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? ' ' + d.getFullYear() : ''}`;
       if (d.toISOString().slice(0,10) < today()) est += ', trolig passert';
     }
@@ -517,6 +536,8 @@
             <div><span class="tag">${m ? esc(m.name) : 'Generelt'}</span><span class="sub">${typeLabel(e.type)}</span></div>
             <div class="desc" style="margin-top:4px;white-space:pre-wrap;word-break:break-word">${e.desc ? esc(e.desc) : '<span class="missing">Ikke utfylt – trykk for å fylle inn</span>'}</div>
             ${e.hoursMissing ? '<div class="missing sub" style="margin-top:2px">Timeteller ikke fylt inn</div>' : ''}
+            ${e.hours == null && e.hoursEst != null ? `<div class="sub" style="margin-top:2px">⏱️ ~${fmtH(e.hoursEst)} t (anslått)</div>` : ''}
+            ${estLine(e)}
             ${(e.hours != null || e.by || e.cost) ? `<div class="meta sub" style="margin-top:4px;display:flex;gap:12px;flex-wrap:wrap">
               ${e.hours != null ? `<span>⏱️ ${fmtH(e.hours)} t</span>` : ''}${e.by ? `<span>👤 ${esc(e.by)}</span>` : ''}${e.cost ? `<span>💰 ${Math.round(e.cost).toLocaleString('no-NO')} kr</span>` : ''}</div>` : ''}
           </div></div>`;
@@ -557,7 +578,7 @@
     const prev = { lastHours: j.lastHours, lastDate: j.lastDate };
     const cur = currentHours(m);
     const en = { id: uid(), created: Date.now(), jobId: j.id, date: today(), time: nowTime(),
-      hours: isDayJob(j) ? null : cur, type: j.kind || 'service', desc: '✓ ' + j.name, by: '', cost: null };
+      hours: null, hoursEst: isDayJob(j) ? undefined : cur, type: j.kind || 'service', desc: '✓ ' + j.name, by: '', cost: null };
     m.entries.push(en);
     if (isDayJob(j)) j.lastDate = today(); else j.lastHours = cur ?? j.lastHours;
     save(); render();
@@ -565,6 +586,13 @@
     toast(`✓ ${j.name} – neste ${s.day ? fmtDate(s.next) : 'ved ' + fmtH(s.next) + ' t'}`, 'Angre', () => {
       m.entries = m.entries.filter(x => x !== en); Object.assign(j, prev); save(); render(); toast('Angret');
     });
+  }
+  // Anslåtte timer i maskinrunden – vises bare for maskiner som ikke har ført timer den dagen
+  function estLine(e){
+    if (!e.estimates || !e.estimates.length) return '';
+    const parts = e.estimates.map(x => ({ x, m: machineById(x.mid) })).filter(o => o.m && !readOnDate(o.m, e.date))
+      .map(o => `${esc(shortName(o.m))} ~${fmtH(o.x.hours)}`);
+    return parts.length ? `<div class="sub" style="margin-top:4px">⏱️ Anslått: ${parts.join(' · ')}</div>` : '';
   }
   function bindSearch(){
     const s = document.getElementById('search');
@@ -592,7 +620,7 @@
         <div class="ico">${esc(m.icon || '⚙️')}</div>
         <div class="info">
           <div class="name">${esc(m.name)}</div>
-          <div class="sub">${mi.hours != null ? `${fmtH(mi.hours)} t${mi.date ? ' (' + fmtDate(mi.date) + ')' : ''} · ` : ''}${m.jobs.length} jobb${m.jobs.length===1?'':'er'} · ${m.entries.length} i loggen</div>
+          <div class="sub">${mi.hours != null ? (() => { const es = estHours(m, today()); return es.estimated ? `~${fmtH(es.hours)} t anslått · ` : `${fmtH(mi.hours)} t${mi.date ? ' (' + fmtDate(mi.date) + ')' : ''} · `; })() : ''}${m.jobs.length} jobb${m.jobs.length===1?'':'er'} · ${m.entries.length} i loggen</div>
           ${al ? `<div style="margin-top:6px"><span class="pill ${al.cls}">${esc(al.text)}</span></div>` : ''}
         </div>
         <div class="sub">›</div></div>`;
@@ -613,11 +641,12 @@
 
     view.innerHTML = `
       <div class="stats">
-        ${(mi.hours != null || m.jobs.some(j => !isDayJob(j))) ? `<div class="stat btnlike" id="meterBtn"><b>${fmtH(mi.hours)}</b><span>timer · oppdater</span></div>` : ''}
+        ${(mi.hours != null || m.jobs.some(j => !isDayJob(j))) ? (() => { const es = estHours(m, today());
+          return `<div class="stat btnlike" id="meterBtn"><b>${es && es.estimated ? '~' : ''}${fmtH(es ? es.hours : null)}</b><span>${es && es.estimated ? 'anslått' : 'timer'} · oppdater</span></div>`; })() : ''}
         <div class="stat"><b>${m.entries.length}</b><span>i loggen</span></div>
         <div class="stat"><b>${cost ? Math.round(cost).toLocaleString('no-NO') : '–'}</b><span>kr totalt</span></div>
       </div>
-      ${mi.date ? `<p class="sub" style="margin:-4px 4px 4px">Timeteller sist oppdatert ${fmtDate(mi.date)}${num(m.avgPerDay) ? ` · snitt ${fmtH(num(m.avgPerDay))} t/døgn` : ''}</p>` : ''}
+      ${mi.date ? `<p class="sub" style="margin:-4px 4px 4px">Sist avlest ${fmtH(mi.hours)} t ${fmtDate(mi.date)} · snitt ${fmtH(num(m.avgPerDay) || 0)} t/døgn${num(m.avgPerDay) ? '' : ' (sett snitt under ✎ for å få anslag)'}</p>` : ''}
 
       <h3>Jobber <button id="addJobBtn">+ Ny jobb</button></h3>
       ${jobs.length ? jobs.map(({j,s}) => `
@@ -704,8 +733,9 @@
       return toast('Dagens maskinrunde er allerede ført');
     }
     const k = turnusDay(date);
+    const estimates = db.machines.filter(hasMeter).map(m => ({ mid: m.id, hours: estHours(m, date).hours }));
     const en = { id: uid(), created: Date.now(), date, time: '07:00', type: 'maskinrunde',
-      desc: 'Maskinrunde' + (k ? ` – dag ${k} av ${db.turnus.on}` : ''), by: '', cost: null, hours: null };
+      desc: 'Maskinrunde' + (k ? ` – dag ${k} av ${db.turnus.on}` : ''), by: '', cost: null, hours: null, estimates };
     db.general.push(en); save(); render(); window.scrollTo(0,0);
     toast(`🌅 ${dayLabel(date)}${k ? ` – dag ${k} av ${db.turnus.on}` : ''} · maskinrunde kl. 07:00`, 'Angre', () => {
       db.general = db.general.filter(x => x !== en); save(); render(); toast('Angret');
@@ -1138,7 +1168,7 @@
         if (e.date !== day){ day = e.date; const k = turnusDay(day);
           h += `<tr class="pday"><td colspan="6">${dayLabel(day)} ${fmtDate(day)}${k ? ` · dag ${k} av ${db.turnus.on}` : ''}</td></tr>`; }
         h += `<tr><td>${esc(e.time || '')}</td><td>${m ? esc(m.name) : 'Generelt'}</td><td>${typeLabel(e.type).replace(/^\S+\s/,'')}</td>
-          <td class="pdesc">${e.desc ? esc(e.desc) : '<i>Ikke utfylt</i>'}${e.cost ? ` (${Math.round(e.cost).toLocaleString('no-NO')} kr)` : ''}</td>
+          <td class="pdesc">${e.desc ? esc(e.desc) : '<i>Ikke utfylt</i>'}${estLine(e).replace(/<[^>]+>/g,'') ? '<br><small>' + estLine(e).replace(/<[^>]+>/g,'') + '</small>' : ''}${e.cost ? ` (${Math.round(e.cost).toLocaleString('no-NO')} kr)` : ''}</td>
           <td class="num">${e.hours != null ? fmtH(e.hours) : ''}</td><td>${esc(e.by || '')}</td></tr>`;
       }
       h += '</tbody></table>';
@@ -1188,7 +1218,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '4';
+  const APP_VERSION = '5';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
