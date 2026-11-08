@@ -434,7 +434,8 @@
     // Høyeste kjente timeteller og datoen den gjelder
     let h = num(m.startHours), date = null;
     if (m.meter && m.meter.hours != null && (h == null || m.meter.hours >= h)){ h = m.meter.hours; date = m.meter.date; }
-    for (const e of m.entries) if (e.hours != null && (h == null || e.hours > h || (e.hours === h && e.date > (date||'')))){ h = e.hours; date = e.date; }
+    for (const e of m.entries.concat((m.meterLog || []).map(x => ({ hours: x.hours, date: x.date }))))
+      if (e.hours != null && (h == null || e.hours > h || (e.hours === h && e.date > (date||'')))){ h = e.hours; date = e.date; }
     return { hours: h, date };
   }
   // Anslått timeteller på en dato: siste avlesning før/på datoen + snitt per døgn × dager siden
@@ -442,16 +443,28 @@
     const r = [];
     if (num(m.startHours) != null) r.push({ h: num(m.startHours), d: '0000-01-01' });
     if (m.meter && m.meter.hours != null) r.push({ h: m.meter.hours, d: m.meter.date || '0000-01-01' });
+    for (const x of (m.meterLog || [])) r.push({ h: x.hours, d: x.date });
     for (const e of m.entries) if (e.hours != null) r.push({ h: e.hours, d: e.date });
     return r.sort((a,b) => a.d.localeCompare(b.d) || a.h - b.h);
   }
   const hasMeter = m => readings(m).length > 0;
+  // Mellom to avlesninger fordeles timene jevnt på dagene imellom. Etter siste avlesning brukes snitt per døgn.
   function estHours(m, date){
-    const r = readings(m); if (!r.length) return null;
-    const before = r.filter(x => x.d <= date); const base = before.length ? before[before.length-1] : r[0];
+    const r = readings(m).filter(x => x.d !== '0000-01-01');
+    const start = readings(m).find(x => x.d === '0000-01-01');
+    if (!r.length) return start ? { hours: start.h, estimated: false, readOn: null } : null;
+    const before = r.filter(x => x.d <= date), after = r.filter(x => x.d > date);
+    const b = before[before.length-1], a = after[0];
     const avg = num(m.avgPerDay) || 0;
-    const days = Math.max(0, daysBetween(base.d === '0000-01-01' ? date : base.d, date));
-    return { hours: Math.round((base.h + avg * days) * 10) / 10, estimated: avg > 0 && days > 0, readOn: base.d };
+    if (b && b.d === date) return { hours: b.h, estimated: false, readOn: b.d };
+    if (b && a && a.h >= b.h){
+      const frac = daysBetween(b.d, date) / daysBetween(b.d, a.d);
+      return { hours: Math.round(b.h + (a.h - b.h) * frac), estimated: true, readOn: b.d, between: true };
+    }
+    if (b){ const days = daysBetween(b.d, date); return { hours: avg > 0 && days > 0 ? Math.round(b.h + avg * days) : b.h, estimated: avg > 0 && days > 0, readOn: b.d }; }
+    // Før første avlesning: regn bakover med snittet
+    const days = daysBetween(date, a.d);
+    return { hours: avg > 0 ? Math.max(0, Math.round(a.h - avg * days)) : a.h, estimated: avg > 0, readOn: a.d };
   }
   const readOnDate = (m, date) => m.entries.some(e => e.hours != null && e.date === date) || (m.meter && m.meter.date === date);
   const fmtL = v => v == null ? '–' : Math.round(v).toLocaleString('no-NO');
@@ -487,6 +500,15 @@
       .map(e => ({ d: e.date, l: e.bunker })).sort((a,b) => a.d.localeCompare(b.d));
     const before = r.filter(x => x.d <= date); if (!before.length) return null;
     const last = before[before.length-1], prev = before[before.length-2];
+    // Mellom to føringer: fordel forbruket (motortimer × L/t, ellers jevnt per dag) slik at tallene treffer neste føring
+    const next = r.find(x => x.d > date);
+    if (next && last.d < date){
+      const total = last.l + receivedBetween(last.d, next.d) - next.l;
+      let frac = daysBetween(last.d, date) / daysBetween(last.d, next.d);
+      if (anyFuelRate()){ const all = engineFuelUse(last.d, next.d); if (all > 0) frac = engineFuelUse(last.d, date) / all; }
+      return { liters: Math.max(0, last.l + receivedBetween(last.d, date) - Math.max(0, total) * frac), estimated: true, last: last.l, lastDate: last.d,
+               perDay: Math.max(0, total) / daysBetween(last.d, next.d), byEngines: anyFuelRate(), between: true };
+    }
     let use = 0;
     if (prev){ const dd = daysBetween(prev.d, last.d), u = prev.l + receivedBetween(prev.d, last.d) - last.l; if (dd > 0 && u > 0) use = u / dd; }
     const days = daysBetween(last.d, date);
@@ -671,7 +693,7 @@
   function estLine(e){
     if (!e.estimates || !e.estimates.length) return '';
     const parts = e.estimates.map(x => ({ x, m: machineById(x.mid) })).filter(o => o.m && !readOnDate(o.m, e.date))
-      .map(o => `${esc(shortName(o.m))} ~${fmtH(o.x.hours)}`);
+      .map(o => { const es = estHours(o.m, e.date); return `${esc(shortName(o.m))} ~${fmtH(es ? es.hours : o.x.hours)}`; });
     return parts.length ? `<div class="sub" style="margin-top:4px">⏱️ Anslått: ${parts.join(' · ')}</div>` : '';
   }
   function bindSearch(){
@@ -914,6 +936,11 @@
       const days = (new Date(date) - new Date(mi.date)) / 864e5;
       if (days >= 3) m.avgPerDay = Math.round((h - mi.hours) / days * 10) / 10;
     }
+    // Ta vare på forrige avlesning, så dagene imellom kan fylles ut jevnt
+    if (m.meter && m.meter.hours != null && m.meter.date && m.meter.date !== date){
+      m.meterLog = (m.meterLog || []).filter(x => x.date !== m.meter.date); m.meterLog.push({ ...m.meter });
+    }
+    m.meterLog = (m.meterLog || []).filter(x => x.date !== date);
     m.meter = { hours: h, date };
     const fuel = num(meterForm.fuel.value);
     if (fuel != null){ m.fuelReadings = (m.fuelReadings || []).filter(r => r.date !== date); m.fuelReadings.push({ date, hours: h, fuel }); m.fuelReadings.sort((a,b) => a.date.localeCompare(b.date)); }
@@ -1241,7 +1268,7 @@
     for (let d = from; d <= to && days.length < 120; d = addDays(d, 1)) if (!db.turnus || turnusDay(d) || list.some(x => x.e.date === d)) days.push(d);
     const t = v => (v * DENSITY / 1000).toLocaleString('no-NO', {maximumFractionDigits: 1});
     const P = (x, f) => x == null ? '–' : `${x.est ? '~' : ''}${f(x.v)}`;
-    let h = `<h1>Maskindagbok – daglig føring</h1><div class="pmeta">${fmtDate(from)} – ${fmtDate(to)} · ~ = anslått</div>`;
+    let h = `<h1>Maskindagbok – daglig føring</h1><div class="pmeta">${fmtDate(from)} – ${fmtDate(to)} · ~ = anslått (jevnt fordelt mellom avlesninger)</div>`;
     for (const d of days){
       const prev = addDays(d, -1), k = turnusDay(d);
       const hd = cols.map(m => hoursOn(m, d)), hp = cols.map(m => hoursOn(m, prev));
@@ -1438,7 +1465,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '12';
+  const APP_VERSION = '13';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
