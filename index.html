@@ -129,6 +129,24 @@
   .toast.act{pointer-events:auto;cursor:pointer;display:flex;gap:14px;align-items:center}
   .toast.act u{color:#ffd29a;text-decoration:none;font-weight:700;white-space:nowrap}
   .missing{color:var(--warn);font-style:italic}
+  #printArea{display:none}
+  @media print{
+    @page{size:A4;margin:14mm 12mm}
+    html,body{background:#fff !important}
+    body > *:not(#printArea){display:none !important}
+    #printArea{display:block;color:#000;font-size:10.5pt;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+    #printArea h1{font-size:16pt;margin:0 0 2pt}
+    #printArea h2{font-size:12pt;margin:14pt 0 4pt;border-bottom:1.5pt solid #1f3a4d;padding-bottom:2pt}
+    #printArea .pmeta{color:#555;font-size:9pt;margin-bottom:6pt}
+    #printArea table{width:100%;border-collapse:collapse;margin-bottom:4pt}
+    #printArea th,#printArea td{text-align:left;vertical-align:top;padding:3pt 4pt;border-bottom:.5pt solid #ccc}
+    #printArea th{font-size:8.5pt;color:#555;font-weight:600}
+    #printArea tr.pday td{background:#eef2f5;font-weight:700;border-bottom:none;padding-top:5pt}
+    #printArea .num{text-align:right;white-space:nowrap}
+    #printArea .over{color:#b00;font-weight:700} #printArea .soon{color:#b85c00;font-weight:600}
+    #printArea tr{page-break-inside:avoid}
+    #printArea .pdesc{white-space:pre-wrap}
+  }
 </style>
 </head>
 <body>
@@ -276,6 +294,7 @@
 <dialog id="menuDlg"><div class="dlg">
   <h2>Meny</h2>
   <div class="menu-list">
+    <button id="printBtn">🖨️ Skriv ut / lagre som PDF</button>
     <button id="exportBtn">⬇️ Last ned sikkerhetskopi (JSON)</button>
     <button id="importBtn">⬆️ Gjenopprett fra sikkerhetskopi</button>
     <button id="csvBtn">📄 Eksporter logg som CSV (Excel)</button>
@@ -291,6 +310,23 @@
   <p id="askText" style="margin:0 0 4px"></p>
   <div class="btns"><button class="btn sec" id="askNo">Avbryt</button><button class="btn pri" id="askYes">OK</button></div>
 </div></dialog>
+<!-- Utskrift -->
+<dialog id="printDlg"><form class="dlg" id="printForm">
+  <h2>🖨️ Skriv ut / lagre som PDF</h2>
+  <div class="row">
+    <div><label>Fra</label><input name="from" type="date"></div>
+    <div><label>Til</label><input name="to" type="date"></div>
+  </div>
+  <div class="chips" style="margin-top:10px" id="printPresets"></div>
+  <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="jobs" checked style="width:auto"> Ta med jobbstatus og timetellere</label>
+  <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="rounds" checked style="width:auto"> Ta med maskinrunder</label>
+  <p class="hint">På telefonen: velg «Lagre som PDF» som skriver i utskriftsvinduet.</p>
+  <div class="btns">
+    <button type="button" class="btn sec" data-close>Avbryt</button>
+    <button type="submit" class="btn pri">Skriv ut</button>
+  </div>
+</form></dialog>
+<div id="printArea"></div>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 
 <script>
@@ -948,6 +984,77 @@
     } catch(e){ toast('Fant ikke gyldig sikkerhetskopi i filen'); }
   };
 
+  // ---------- Utskrift ----------
+  const printDlg = $('printDlg'), printForm = $('printForm');
+  function printPresets(){
+    const p = [];
+    const k = turnusDay(today());
+    if (k) p.push(['Denne turen', addDays(today(), 1 - k), addDays(today(), db.turnus.on - k)]);
+    if (db.turnus){
+      // forrige tur
+      let d = k ? addDays(today(), -k) : today();
+      for (let i = 0; i < 400 && !turnusDay(d); i++) d = addDays(d, -1);
+      const kd = turnusDay(d); if (kd){ const st = addDays(d, 1 - kd); p.push(['Forrige tur', st, addDays(st, db.turnus.on - 1)]); }
+    }
+    p.push(['Siste 7 dager', addDays(today(), -6), today()]);
+    p.push(['Siste 30 dager', addDays(today(), -29), today()]);
+    const all = allEntries(); if (all.length) p.push(['Alt', all[all.length-1].e.date, all[0].e.date]);
+    return p;
+  }
+  $('printBtn').onclick = () => {
+    menuDlg.close();
+    const p = printPresets();
+    printForm.from.value = p[0][1]; printForm.to.value = p[0][2] > today() ? today() : p[0][2];
+    $('printPresets').innerHTML = p.map((x,i) => `<button type="button" class="chip ${i===0?'on':''}" data-p="${i}">${x[0]}</button>`).join('');
+    $('printPresets').onclick = e => {
+      const b = e.target.closest('[data-p]'); if (!b) return;
+      const x = p[+b.dataset.p]; printForm.from.value = x[1]; printForm.to.value = x[2];
+      $('printPresets').querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === b));
+    };
+    printDlg.showModal();
+  };
+  printForm.addEventListener('submit', e => {
+    e.preventDefault();
+    const from = printForm.from.value || '0000-01-01', to = printForm.to.value || '9999-12-31';
+    let list = allEntries().filter(x => x.e.date >= from && x.e.date <= to);
+    if (!printForm.rounds.checked) list = list.filter(x => x.e.type !== 'maskinrunde');
+    list = list.reverse(); // eldste først på papir
+    let h = `<h1>Maskindagbok</h1>
+      <div class="pmeta">${fmtDate(printForm.from.value) || 'Start'} – ${fmtDate(printForm.to.value) || 'i dag'}
+        · ${list.length} innføringer${db.turnus ? ` · turnus ${db.turnus.on}/${db.turnus.off}` : ''} · skrevet ut ${fmtDate(today())} kl. ${nowTime()}</div>`;
+    h += '<h2>Dagbok</h2>';
+    if (!list.length) h += '<p>Ingen innføringer i perioden.</p>';
+    else {
+      h += '<table><thead><tr><th>Kl.</th><th>Maskin</th><th>Type</th><th>Hva ble gjort / observert</th><th class="num">Timer</th><th>Utført av</th></tr></thead><tbody>';
+      let day = null;
+      for (const {e,m} of list){
+        if (e.date !== day){ day = e.date; const k = turnusDay(day);
+          h += `<tr class="pday"><td colspan="6">${dayLabel(day)} ${fmtDate(day)}${k ? ` · dag ${k} av ${db.turnus.on}` : ''}</td></tr>`; }
+        h += `<tr><td>${esc(e.time || '')}</td><td>${m ? esc(m.name) : 'Generelt'}</td><td>${typeLabel(e.type).replace(/^\S+\s/,'')}</td>
+          <td class="pdesc">${e.desc ? esc(e.desc) : '<i>Ikke utfylt</i>'}${e.cost ? ` (${Math.round(e.cost).toLocaleString('no-NO')} kr)` : ''}</td>
+          <td class="num">${e.hours != null ? fmtH(e.hours) : ''}</td><td>${esc(e.by || '')}</td></tr>`;
+      }
+      h += '</tbody></table>';
+    }
+    if (printForm.jobs.checked && db.machines.length){
+      h += '<h2>Timetellere og jobbstatus</h2>';
+      for (const m of db.machines){
+        const mi = meterInfo(m);
+        h += `<p style="margin:10pt 0 3pt"><b>${esc(m.name)}</b> – ${fmtH(mi.hours)} t${mi.date ? ` (${fmtDate(mi.date)})` : ''}${m.model ? ` · ${esc(m.model)}` : ''}</p>`;
+        if (!m.jobs.length) continue;
+        h += '<table><thead><tr><th>Jobb</th><th class="num">Intervall</th><th class="num">Sist utført</th><th class="num">Forfaller ved</th><th class="num">Gjenstår</th></tr></thead><tbody>';
+        for (const {j,s} of m.jobs.map(j => ({j, s: jobState(m,j)})).sort((a,b) => a.s.left - b.s.left)){
+          h += `<tr><td>${esc(j.name)}</td><td class="num">${fmtH(j.interval)} t</td><td class="num">${fmtH(j.lastHours || 0)} t</td>
+            <td class="num">${fmtH(s.next)} t</td><td class="num ${s.cls === 'bad' ? 'over' : s.cls === 'warn' ? 'soon' : ''}">${s.left < 0 ? fmtH(-s.left) + ' t over' : fmtH(s.left) + ' t'}</td></tr>`;
+        }
+        h += '</tbody></table>';
+      }
+    }
+    $('printArea').innerHTML = h;
+    printDlg.close();
+    setTimeout(() => { try { window.print(); } catch(err){ toast('Utskrift er ikke tilgjengelig her'); } }, 150);
+  });
+
   // ---------- Bekreft-dialog ----------
   function ask(text, yes='OK'){
     return new Promise(res => {
@@ -973,7 +1080,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '2';
+  const APP_VERSION = '3';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
