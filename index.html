@@ -198,6 +198,7 @@
       </select></div>
     <div><label>Snitt timer per døgn</label><input name="avgPerDay" type="number" inputmode="decimal" min="0" step="0.1" placeholder="F.eks. 6"></div>
   </div>
+  <div id="rateWrap"><label>Forbruk (liter per time) – bare dieselmotorer</label><input name="fuelRate" type="number" inputmode="decimal" min="0" step="0.1" placeholder="Regnes ut fra Total fuel consumed"></div>
   <label>Modell / serienummer</label><input name="model" placeholder="Valgfritt">
   <label>Notater</label><textarea name="notes" placeholder="Oljetype, filternummer …"></textarea>
   <p class="hint">Snitt per døgn brukes til å anslå datoen en jobb forfaller.</p>
@@ -216,6 +217,7 @@
     <div><label>Timer nå *</label><input name="hours" type="number" inputmode="decimal" min="0" step="0.1" required></div>
     <div><label>Dato</label><input name="date" type="date" required></div>
   </div>
+  <div id="fuelWrap"><label>Total fuel consumed (liter) – valgfritt</label><input name="fuel" type="number" inputmode="decimal" min="0" step="1" placeholder="Fra motorens display"><p class="hint" id="fuelHint"></p></div>
   <div class="btns">
     <button type="button" class="btn sec" data-close>Avbryt</button>
     <button type="submit" class="btn pri">Lagre</button>
@@ -449,7 +451,26 @@
   const receivedBetween = (a, b) => fuelSum('drivstoff', a, b) - fuelSum('overforing', a, b);
   const receivedOn = d => fuelSum('drivstoff', addDays(d, -1), d);
   const transferredOn = d => fuelSum('overforing', addDays(d, -1), d);
-  // Bunkers: siste føring før/på datoen, minus snittforbruk, pluss det som er mottatt (bunkret) siden
+  // Dieselmotorer (ikke Azipod – de er elektriske og går på generatorene)
+  const isDiesel = m => (m.group || 'Motorer') === 'Motorer';
+  // Liter per time: manuelt tall, ellers fra de to siste «Total fuel consumed», ellers totalt/timer
+  function fuelRate(m){
+    if (num(m.fuelRate) > 0) return { rate: num(m.fuelRate), manual: true };
+    const r = (m.fuelReadings || []).filter(x => x.fuel != null && x.hours != null);
+    for (let i = r.length - 1; i > 0; i--){
+      const dh = r[r.length-1].hours - r[i-1].hours, df = r[r.length-1].fuel - r[i-1].fuel;
+      if (dh >= 5 && df > 0) return { rate: df / dh, manual: false };
+    }
+    if (r.length && r[r.length-1].hours > 0 && r[r.length-1].fuel > 0) return { rate: r[r.length-1].fuel / r[r.length-1].hours, manual: false };
+    return null;
+  }
+  const engineFuelUse = (a, b) => db.machines.filter(isDiesel).reduce((t, m) => {
+    const fr = fuelRate(m); if (!fr) return t;
+    const ha = estHours(m, a), hb = estHours(m, b); if (!ha || !hb) return t;
+    return t + Math.max(0, hb.hours - ha.hours) * fr.rate;
+  }, 0);
+  const anyFuelRate = () => db.machines.some(m => isDiesel(m) && fuelRate(m));
+  // Bunkers: siste føring før/på datoen, minus forbruk (motortimer × L/t, eller snitt mellom føringer), pluss mottatt
   function bunkerEst(date){
     const r = db.general.filter(e => e.type === 'maskinrunde' && e.bunker != null)
       .map(e => ({ d: e.date, l: e.bunker })).sort((a,b) => a.d.localeCompare(b.d));
@@ -458,7 +479,8 @@
     let use = 0;
     if (prev){ const dd = daysBetween(prev.d, last.d), u = prev.l + receivedBetween(prev.d, last.d) - last.l; if (dd > 0 && u > 0) use = u / dd; }
     const days = daysBetween(last.d, date);
-    return { liters: Math.max(0, last.l - use * days + receivedBetween(last.d, date)), estimated: days > 0, last: last.l, lastDate: last.d, perDay: use };
+    const spent = anyFuelRate() ? engineFuelUse(last.d, date) : use * days;
+    return { liters: Math.max(0, last.l - spent + receivedBetween(last.d, date)), estimated: days > 0, last: last.l, lastDate: last.d, perDay: anyFuelRate() ? engineFuelUse(addDays(date, -1), date) : use, byEngines: anyFuelRate() };
   }
   const shortName = m => m.name.replace(/ generator /i, ' ').replace(/ havneaggregat/i, '').replace(/\.$/, '');
   // Til jobbstatus: anslått timeteller i dag (faller tilbake på siste avlesning)
@@ -693,7 +715,7 @@
         <div class="stat"><b>${m.entries.length}</b><span>i loggen</span></div>
         <div class="stat"><b>${cost ? Math.round(cost).toLocaleString('no-NO') : '–'}</b><span>kr totalt</span></div>
       </div>
-      ${mi.date ? `<p class="sub" style="margin:-4px 4px 4px">Sist avlest ${fmtH(mi.hours)} t ${fmtDate(mi.date)} · snitt ${fmtH(num(m.avgPerDay) || 0)} t/døgn${num(m.avgPerDay) ? '' : ' (sett snitt under ✎ for å få anslag)'}</p>` : ''}
+      ${mi.date ? `<p class="sub" style="margin:-4px 4px 4px">Sist avlest ${fmtH(mi.hours)} t ${fmtDate(mi.date)} · snitt ${fmtH(num(m.avgPerDay) || 0)} t/døgn${(() => { const fr = isDiesel(m) && fuelRate(m); return fr ? ` · ${fmtH(fr.rate)} L/t` : ''; })()}${num(m.avgPerDay) ? '' : ' (sett snitt under ✎ for å få anslag)'}</p>` : ''}
 
       <h3>Jobber <button id="addJobBtn">+ Ny jobb</button></h3>
       ${jobs.length ? jobs.map(({j,s}) => `
@@ -832,6 +854,7 @@
     if (m){
       machineForm.name.value = m.name; machineForm.icon.value = m.icon || '⚙️';
       machineForm.avgPerDay.value = m.avgPerDay ?? ''; machineForm.model.value = m.model || '';
+      machineForm.fuelRate.value = m.fuelRate ?? ''; { const fr = fuelRate({ ...m, fuelRate: null }); machineForm.fuelRate.placeholder = fr ? `Utregnet: ${fmtH(fr.rate)} L/t` : 'Regnes ut fra Total fuel consumed'; }
       machineForm.notes.value = m.notes || '';
     }
     machineDlg.showModal();
@@ -839,7 +862,7 @@
   machineForm.addEventListener('submit', e => {
     e.preventDefault();
     const f = machineForm, data = {
-      name: f.name.value.trim(), icon: f.icon.value, avgPerDay: num(f.avgPerDay.value),
+      name: f.name.value.trim(), icon: f.icon.value, avgPerDay: num(f.avgPerDay.value), fuelRate: num(f.fuelRate.value),
       model: f.model.value.trim(), notes: f.notes.value.trim()
     };
     if (!data.name) return;
@@ -864,6 +887,9 @@
     $('meterInfo').textContent = mi.hours != null ? `Sist registrert: ${fmtH(mi.hours)} t${mi.date ? ' (' + fmtDate(mi.date) + ')' : ''}` : '';
     meterForm.hours.value = ''; meterForm.hours.placeholder = mi.hours != null ? fmtH(mi.hours) : 'Timer';
     meterForm.date.value = today();
+    const fr = fuelRate(m), lf = (m.fuelReadings || []).slice(-1)[0];
+    $('fuelWrap').hidden = !isDiesel(m);
+    $('fuelHint').textContent = (lf ? `Sist: ${fmtL(lf.fuel)} L ved ${fmtH(lf.hours)} t (${fmtDate(lf.date)}). ` : '') + (fr ? `Forbruk nå: ${fmtH(fr.rate)} L/t${fr.manual ? ' (satt manuelt)' : ''}.` : '');
     meterDlg.showModal(); meterForm.hours.focus();
   }
   meterForm.addEventListener('submit', async e => {
@@ -878,7 +904,10 @@
       if (days >= 3) m.avgPerDay = Math.round((h - mi.hours) / days * 10) / 10;
     }
     m.meter = { hours: h, date };
-    save(); meterDlg.close(); render(); toast('Timeteller oppdatert');
+    const fuel = num(meterForm.fuel.value);
+    if (fuel != null){ m.fuelReadings = (m.fuelReadings || []).filter(r => r.date !== date); m.fuelReadings.push({ date, hours: h, fuel }); m.fuelReadings.sort((a,b) => a.date.localeCompare(b.date)); }
+    save(); meterDlg.close(); render();
+    const fr = fuelRate(m); toast(fr && fuel != null ? `Timeteller oppdatert – forbruk ${fmtH(fr.rate)} L/t` : 'Timeteller oppdatert');
   });
 
   // Jobb
@@ -1070,7 +1099,7 @@
     const fuel = ['drivstoff','overforing'].includes(entryForm.type.value);
     $('recvWrap').hidden = !fuel;
     $('recvLabel').textContent = entryForm.type.value === 'overforing' ? '🚢 Overført (liter)' : '⛽ Mottatt (liter)';
-    if (on){ const es = bunkerEst(entryForm.date.value || today()); $('bunkerHint').textContent = es ? `Anslått: ~${fmtL(es.liters)} L (sist ført ${fmtL(es.last)} L ${fmtDate(es.lastDate)})` : ''; }
+    if (on){ const es = bunkerEst(entryForm.date.value || today()); $('bunkerHint').textContent = es ? `Anslått: ~${fmtL(es.liters)} L (sist ført ${fmtL(es.last)} L ${fmtDate(es.lastDate)}${es.byEngines ? ', forbruk regnet fra motortimer × L/t' : ''})` : ''; }
   }
   entryForm.type.addEventListener('change', updateBunkerField);
   entryForm.date.addEventListener('change', updateBunkerField);
@@ -1239,7 +1268,7 @@
           ${out ? `<tr><td>Overført til andre båter</td><td>${L({ v: out, est: false })}</td></tr>` : ''}
           <tr><td>Beholdning kl. 2400 den ${fmtDate(d)}</td><td>${L(bd)}</td></tr>
         </tbody></table>
-        <div class="pmeta" style="margin-top:8pt">~ = anslått ut fra snitt per døgn. Tall uten ~ er avlest/ført. Tonn regnet med ${DENSITY} kg/L.</div>
+        <div class="pmeta" style="margin-top:8pt">~ = anslått${anyFuelRate() ? ' (diesel: motortimer × L/t per motor)' : ' ut fra snitt per døgn'}. Tall uten ~ er avlest/ført. Tonn regnet med ${DENSITY} kg/L.</div>
       </div>`;
     }).join('');
   }
@@ -1364,7 +1393,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '10';
+  const APP_VERSION = '11';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
