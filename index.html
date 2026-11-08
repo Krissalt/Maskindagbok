@@ -165,6 +165,15 @@
     #printArea .anm td{border-bottom:.5pt solid #bbb}
     #printArea .anm td:first-child{width:42pt;font-weight:700}
     #printArea .est{color:#555}
+    #printArea .dday{break-inside:avoid;page-break-inside:avoid;border:1pt solid #333;border-radius:4pt;padding:6pt 8pt;margin-bottom:8pt}
+    #printArea .dday h3{margin:0 0 4pt;font-size:11.5pt;text-transform:none;letter-spacing:0;color:#000;display:block}
+    #printArea .dday .grid{margin:2pt 0 4pt}
+    #printArea .dday .grid th,#printArea .dday .grid td{padding:2pt 3pt;font-size:9.5pt}
+    #printArea .dline{font-size:10pt;margin:2pt 0}
+    #printArea .dline b{display:inline-block;min-width:62pt}
+    #printArea .danm{margin:3pt 0 0;padding:0;list-style:none;font-size:10pt}
+    #printArea .danm li{padding:1pt 0;border-top:.4pt dotted #aaa}
+    #printArea .danm li span{display:inline-block;width:34pt;font-weight:700}
   }
 </style>
 </head>
@@ -347,10 +356,12 @@
   </div>
   <div class="chips" style="margin-top:10px" id="printPresets"></div>
   <label>Format</label>
-  <select name="format"><option value="book">Som maskindagboka – én side per dag</option><option value="list">Liste – hele perioden samlet</option></select>
+  <select name="format"><option value="daily">Daglig føring – bare det som føres i boka</option><option value="book">Som maskindagboka – én side per dag</option><option value="list">Liste – hele perioden samlet</option></select>
+  <div id="printOpts">
   <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="jobs" checked style="width:auto"> Ta med jobbstatus og timetellere</label>
   <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="rounds" checked style="width:auto"> Ta med maskinrunder</label>
   <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="hourtable" checked style="width:auto"> Timetabell per dag (motorer og Azipoder)</label>
+  </div>
   <p class="hint">På telefonen: velg «Lagre som PDF» som skriver i utskriftsvinduet.</p>
   <div class="btns">
     <button type="button" class="btn sec" data-close>Avbryt</button>
@@ -1224,6 +1235,32 @@
     const be = bunkerEst(d); return be ? { v: be.liters, est: be.estimated } : null;
   }
   const pv = (x, f = fmtH) => x == null ? '' : `<span class="${x.est ? 'est' : ''}">${x.est ? '~' : ''}${f(x.v)}</span>`;
+  function dailyPages(from, to, list){
+    const cols = db.machines.filter(hasMeter).sort((a,b) => GROUPS.indexOf(a.group || 'Motorer') - GROUPS.indexOf(b.group || 'Motorer'));
+    const days = [];
+    for (let d = from; d <= to && days.length < 120; d = addDays(d, 1)) if (!db.turnus || turnusDay(d) || list.some(x => x.e.date === d)) days.push(d);
+    const t = v => (v * DENSITY / 1000).toLocaleString('no-NO', {maximumFractionDigits: 1});
+    const P = (x, f) => x == null ? '–' : `${x.est ? '~' : ''}${f(x.v)}`;
+    let h = `<h1>Maskindagbok – daglig føring</h1><div class="pmeta">${fmtDate(from)} – ${fmtDate(to)} · ~ = anslått</div>`;
+    for (const d of days){
+      const prev = addDays(d, -1), k = turnusDay(d);
+      const hd = cols.map(m => hoursOn(m, d)), hp = cols.map(m => hoursOn(m, prev));
+      const run = cols.map((m, i) => (hp[i] && hd[i]) ? { v: Math.max(0, hd[i].v - hp[i].v), est: hp[i].est || hd[i].est } : null);
+      const bp = bunkerOn(prev), bd = bunkerOn(d), rec = receivedOn(d), out = transferredOn(d);
+      const use = (bp && bd && bp.v + rec - out >= bd.v) ? { v: bp.v + rec - out - bd.v, est: bp.est || bd.est } : null;
+      const notes = list.filter(x => x.e.date === d);
+      h += `<div class="dday"><h3>${dayName(d)} ${fmtDate(d)}${k ? ` · dag ${k} av ${db.turnus.on}` : ''}</h3>
+        ${cols.length ? `<table class="grid"><thead><tr><th></th>${cols.map(m => `<th>${esc(shortName(m))}</th>`).join('')}</tr></thead><tbody>
+          <tr><td>Timer kl. 2400</td>${hd.map(x => `<td>${P(x, fmtH)}</td>`).join('')}</tr>
+          <tr><td>I gang siste døgn</td>${run.map(x => `<td>${P(x, fmtH)}</td>`).join('')}</tr></tbody></table>` : ''}
+        <div class="dline"><b>Bunkers</b> ${bd ? `${P(bd, fmtL)} L (≈ ${t(bd.v)} t)` : '–'}
+          &nbsp; · &nbsp;<b style="min-width:0">Forbruk</b> ${use ? `${P(use, fmtL)} L (≈ ${t(use.v)} t)` : '–'}
+          ${rec ? ` &nbsp;· &nbsp;<b style="min-width:0">Mottatt</b> ${fmtL(rec)} L` : ''}${out ? ` &nbsp;· &nbsp;<b style="min-width:0">Overført</b> ${fmtL(out)} L` : ''}</div>
+        <ul class="danm">${notes.map(({e,m}) => `<li><span>${esc((e.time || '').replace(':',''))}</span>${m ? esc(shortName(m)) + ': ' : ''}${e.desc ? esc(e.desc).replace(/\n/g, ' – ') : typeLabel(e.type).replace(/^\S+\s/,'')}${e.received ? ` (${fmtL(e.received)} L)` : ''}${e.by ? ` – ${esc(e.by)}` : ''}</li>`).join('') || '<li class="est">Ingen anmerkninger</li>'}</ul>
+      </div>`;
+    }
+    return h;
+  }
   function bookPages(from, to, list){
     const engines = db.machines.filter(m => (m.group || 'Motorer') === 'Motorer' && hasMeter(m)).slice(0, 4);
     const pods = db.machines.filter(m => /azipod/i.test(m.name) && hasMeter(m));
@@ -1298,6 +1335,8 @@
       const x = p[+b.dataset.p]; printForm.from.value = x[1]; printForm.to.value = x[2];
       $('printPresets').querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === b));
     };
+    const syncOpts = () => { $('printOpts').hidden = printForm.format.value !== 'list'; };
+    printForm.format.onchange = syncOpts; syncOpts();
     printDlg.showModal();
   };
   printForm.addEventListener('submit', e => {
@@ -1306,6 +1345,12 @@
     let list = allEntries().filter(x => x.e.date >= from && x.e.date <= to);
     if (!printForm.rounds.checked) list = list.filter(x => x.e.type !== 'maskinrunde');
     list = list.reverse(); // eldste først på papir
+    if (printForm.format.value === 'daily'){
+      $('printArea').innerHTML = dailyPages(printForm.from.value || (list[0] && list[0].e.date) || today(), printForm.to.value || today(), allEntries().filter(x => x.e.date >= from && x.e.date <= to).reverse());
+      printDlg.close();
+      setTimeout(() => { try { window.print(); } catch(err){ toast('Utskrift er ikke tilgjengelig her'); } }, 150);
+      return;
+    }
     if (printForm.format.value === 'book'){
       $('printArea').innerHTML = bookPages(printForm.from.value || (list[0] && list[0].e.date) || today(), printForm.to.value || today(), list);
       printDlg.close();
@@ -1393,7 +1438,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '11';
+  const APP_VERSION = '12';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
