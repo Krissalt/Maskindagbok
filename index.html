@@ -332,6 +332,7 @@
   <div class="chips" style="margin-top:10px" id="printPresets"></div>
   <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="jobs" checked style="width:auto"> Ta med jobbstatus og timetellere</label>
   <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="rounds" checked style="width:auto"> Ta med maskinrunder</label>
+  <label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" name="hourtable" checked style="width:auto"> Timetabell per dag (motorer og Azipoder)</label>
   <p class="hint">På telefonen: velg «Lagre som PDF» som skriver i utskriftsvinduet.</p>
   <div class="btns">
     <button type="button" class="btn sec" data-close>Avbryt</button>
@@ -481,6 +482,7 @@
     ...db.machines.flatMap(m => m.entries.map(e => ({e, m})))
   ].sort((x,y) => sortEntries([x.e,y.e])[0] === x.e ? -1 : 1);
   const WD = ['søndag','mandag','tirsdag','onsdag','torsdag','fredag','lørdag'];
+  function dayName(s){ const d = new Date(s + 'T12:00:00'), w = WD[d.getDay()]; return w.charAt(0).toUpperCase() + w.slice(1); }
   function dayLabel(s){
     const t = today(), d = new Date(s + 'T12:00:00'), y = new Date(t + 'T12:00:00'); y.setDate(y.getDate()-1);
     if (s === t) return 'I dag';
@@ -1159,6 +1161,23 @@
     let h = `<h1>Maskindagbok</h1>
       <div class="pmeta">${fmtDate(printForm.from.value) || 'Start'} – ${fmtDate(printForm.to.value) || 'i dag'}
         · ${list.length} innføringer${db.turnus ? ` · turnus ${db.turnus.on}/${db.turnus.off}` : ''} · skrevet ut ${fmtDate(today())} kl. ${nowTime()}</div>`;
+    if (printForm.hourtable.checked){
+      const ms = db.machines.filter(hasMeter);
+      const days = []; const f0 = printForm.from.value || (list[0] && list[0].e.date), t0 = printForm.to.value || today();
+      if (f0 && ms.length){
+        for (let d = f0; d <= t0 && days.length < 400; d = addDays(d, 1)) if (!db.turnus || turnusDay(d)) days.push(d);
+        h += `<h2>Timer per dag</h2><table><thead><tr><th>Dag</th>${ms.map(m => `<th class="num">${esc(shortName(m))}</th>`).join('')}</tr></thead><tbody>`;
+        for (const d of days){
+          const k = turnusDay(d);
+          h += `<tr><td>${dayName(d).slice(0,3)} ${fmtDate(d)}${k ? ` · ${k}` : ''}</td>${ms.map(m => {
+            const read = readings(m).filter(r => r.d === d).pop();
+            if (read) return `<td class="num"><b>${fmtH(read.h)}</b></td>`;
+            const es = estHours(m, d); return `<td class="num">${es && es.estimated ? '~' : ''}${fmtH(es ? es.hours : null)}</td>`;
+          }).join('')}</tr>`;
+        }
+        h += `</tbody></table><div class="pmeta">Uthevet = avlest. ~ = anslått ut fra snitt per døgn.${db.turnus ? ' Tallet etter datoen er turnusdag.' : ''}</div>`;
+      }
+    }
     h += '<h2>Dagbok</h2>';
     if (!list.length) h += '<p>Ingen innføringer i perioden.</p>';
     else {
@@ -1166,7 +1185,7 @@
       let day = null;
       for (const {e,m} of list){
         if (e.date !== day){ day = e.date; const k = turnusDay(day);
-          h += `<tr class="pday"><td colspan="6">${dayLabel(day)} ${fmtDate(day)}${k ? ` · dag ${k} av ${db.turnus.on}` : ''}</td></tr>`; }
+          h += `<tr class="pday"><td colspan="6">${dayName(day)} ${fmtDate(day)}${k ? ` · dag ${k} av ${db.turnus.on}` : ''}</td></tr>`; }
         h += `<tr><td>${esc(e.time || '')}</td><td>${m ? esc(m.name) : 'Generelt'}</td><td>${typeLabel(e.type).replace(/^\S+\s/,'')}</td>
           <td class="pdesc">${e.desc ? esc(e.desc) : '<i>Ikke utfylt</i>'}${estLine(e).replace(/<[^>]+>/g,'') ? '<br><small>' + estLine(e).replace(/<[^>]+>/g,'') + '</small>' : ''}${e.cost ? ` (${Math.round(e.cost).toLocaleString('no-NO')} kr)` : ''}</td>
           <td class="num">${e.hours != null ? fmtH(e.hours) : ''}</td><td>${esc(e.by || '')}</td></tr>`;
@@ -1218,7 +1237,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '5';
+  const APP_VERSION = '6';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
