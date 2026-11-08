@@ -264,6 +264,7 @@
   </div>
   <label>Type *</label>
   <select name="type" required></select>
+  <div id="bunkerWrap" hidden><label>⛽ Bunkersbeholdning (liter)</label><input name="bunker" type="number" inputmode="numeric" min="0" step="1" placeholder="F.eks. 42300"><p class="hint" id="bunkerHint"></p></div>
   <label>Hva ble gjort / observert</label>
   <textarea name="desc" placeholder="F.eks. Skiftet motorolje og oljefilter"></textarea>
   <div class="row">
@@ -423,6 +424,18 @@
     return { hours: Math.round((base.h + avg * days) * 10) / 10, estimated: avg > 0 && days > 0, readOn: base.d };
   }
   const readOnDate = (m, date) => m.entries.some(e => e.hours != null && e.date === date) || (m.meter && m.meter.date === date);
+  const fmtL = v => v == null ? '–' : Math.round(v).toLocaleString('no-NO');
+  // Bunkers: siste føring før/på datoen minus snittforbruk mellom de to siste føringene som gikk ned
+  function bunkerEst(date){
+    const r = db.general.filter(e => e.type === 'maskinrunde' && e.bunker != null)
+      .map(e => ({ d: e.date, l: e.bunker })).sort((a,b) => a.d.localeCompare(b.d));
+    const before = r.filter(x => x.d <= date); if (!before.length) return null;
+    const last = before[before.length-1], prev = before[before.length-2];
+    let use = 0;
+    if (prev && prev.l > last.l){ const dd = daysBetween(prev.d, last.d); if (dd > 0) use = (prev.l - last.l) / dd; }
+    const days = daysBetween(last.d, date);
+    return { liters: Math.max(0, last.l - use * days), estimated: days > 0, last: last.l, lastDate: last.d, perDay: use };
+  }
   const shortName = m => m.name.replace(/ generator /i, ' ').replace(/ havneaggregat/i, '').replace(/\.$/, '');
   // Til jobbstatus: anslått timeteller i dag (faller tilbake på siste avlesning)
   const currentHours = m => { const e = estHours(m, today()); return e ? e.hours : null; };
@@ -540,6 +553,7 @@
             ${e.hoursMissing ? '<div class="missing sub" style="margin-top:2px">Timeteller ikke fylt inn</div>' : ''}
             ${e.hours == null && e.hoursEst != null ? `<div class="sub" style="margin-top:2px">⏱️ ~${fmtH(e.hoursEst)} t (anslått)</div>` : ''}
             ${estLine(e)}
+            ${e.type === 'maskinrunde' ? bunkerLine(e) : ''}
             ${(e.hours != null || e.by || e.cost) ? `<div class="meta sub" style="margin-top:4px;display:flex;gap:12px;flex-wrap:wrap">
               ${e.hours != null ? `<span>⏱️ ${fmtH(e.hours)} t</span>` : ''}${e.by ? `<span>👤 ${esc(e.by)}</span>` : ''}${e.cost ? `<span>💰 ${Math.round(e.cost).toLocaleString('no-NO')} kr</span>` : ''}</div>` : ''}
           </div></div>`;
@@ -590,6 +604,12 @@
     });
   }
   // Anslåtte timer i maskinrunden – vises bare for maskiner som ikke har ført timer den dagen
+  function bunkerLine(e){
+    if (e.bunker != null) return `<div class="sub" style="margin-top:2px">⛽ Bunkers: ${fmtL(e.bunker)} L</div>`;
+    const es = bunkerEst(e.date);
+    return es ? `<div class="sub" style="margin-top:2px">⛽ Bunkers ~${fmtL(es.liters)} L <span class="missing">(anslått – trykk for å føre)</span></div>`
+              : `<div class="missing sub" style="margin-top:2px">⛽ Bunkers ikke ført – trykk for å føre</div>`;
+  }
   function estLine(e){
     if (!e.estimates || !e.estimates.length) return '';
     const parts = e.estimates.map(x => ({ x, m: machineById(x.mid) })).filter(o => o.m && !readOnDate(o.m, e.date))
@@ -1019,6 +1039,13 @@
     entryForm.hours.placeholder = !mm ? '–' : c != null ? `Sist: ${fmtH(c)}` : 'Timer';
   }
   entryForm.machine.addEventListener('change', updateHoursField);
+  function updateBunkerField(){
+    const on = entryForm.type.value === 'maskinrunde';
+    $('bunkerWrap').hidden = !on;
+    if (on){ const es = bunkerEst(entryForm.date.value || today()); $('bunkerHint').textContent = es ? `Anslått: ~${fmtL(es.liters)} L (sist ført ${fmtL(es.last)} L ${fmtDate(es.lastDate)})` : ''; }
+  }
+  entryForm.type.addEventListener('change', updateBunkerField);
+  entryForm.date.addEventListener('change', updateBunkerField);
   const lastMachine = () => { try { const id = localStorage.getItem('md.lastMachine'); return machineById(id) ? id : null; } catch(e){ return null; } };
   function openEntryDlg(eid, job, mid, preset){
     // mid: maskin-id fra dagboka ('' / null = generelt). Uten mid brukes åpen maskin.
@@ -1037,7 +1064,7 @@
     if (job) $('entryJobHint').textContent = `Jobben «${job.name}» blir satt som utført ved timetallet du skriver inn.`;
     const cur = m ? currentHours(m) : null;
     if (en){
-      entryForm.date.value = en.date; entryForm.time.value = en.time || ''; entryForm.hours.value = en.hours ?? '';
+      entryForm.date.value = en.date; entryForm.time.value = en.time || ''; entryForm.hours.value = en.hours ?? ''; entryForm.bunker.value = en.bunker ?? '';
       entryForm.type.value = en.type; entryForm.desc.value = en.desc;
       entryForm.by.value = en.by || ''; entryForm.cost.value = en.cost ?? '';
     } else {
@@ -1047,6 +1074,7 @@
       const lastBy = allEntries().find(x => x.e.by); if (lastBy) entryForm.by.value = lastBy.e.by;
     }
     if (preset && !en) entryForm.type.value = preset.type;
+    updateBunkerField();
     updateHoursField();
     entryDlg.showModal();
     if (preset) setTimeout(() => entryForm.desc.focus(), 50);
@@ -1056,7 +1084,8 @@
     const m = machineById(entryForm.machine.value);
     const f = entryForm, data = {
       date: f.date.value, time: f.time.value, hours: m ? num(f.hours.value) : null, type: f.type.value,
-      desc: f.desc.value.trim(), by: f.by.value.trim(), cost: num(f.cost.value)
+      desc: f.desc.value.trim(), by: f.by.value.trim(), cost: num(f.cost.value),
+      bunker: f.type.value === 'maskinrunde' ? num(f.bunker.value) : undefined
     };
     if (!data.date) data.date = today();
     const cur = m ? currentHours(m) : null;
@@ -1164,16 +1193,18 @@
     if (printForm.hourtable.checked){
       const ms = db.machines.filter(hasMeter);
       const days = []; const f0 = printForm.from.value || (list[0] && list[0].e.date), t0 = printForm.to.value || today();
-      if (f0 && ms.length){
+      if (f0 && (ms.length || db.general.some(e => e.bunker != null))){
         for (let d = f0; d <= t0 && days.length < 400; d = addDays(d, 1)) if (!db.turnus || turnusDay(d)) days.push(d);
-        h += `<h2>Timer per dag</h2><table><thead><tr><th>Dag</th>${ms.map(m => `<th class="num">${esc(shortName(m))}</th>`).join('')}</tr></thead><tbody>`;
+        h += `<h2>Timer og bunkers per dag</h2><table><thead><tr><th>Dag</th>${ms.map(m => `<th class="num">${esc(shortName(m))}</th>`).join('')}<th class="num">Bunkers (L)</th></tr></thead><tbody>`;
         for (const d of days){
           const k = turnusDay(d);
           h += `<tr><td>${dayName(d).slice(0,3)} ${fmtDate(d)}${k ? ` · ${k}` : ''}</td>${ms.map(m => {
             const read = readings(m).filter(r => r.d === d).pop();
             if (read) return `<td class="num"><b>${fmtH(read.h)}</b></td>`;
             const es = estHours(m, d); return `<td class="num">${es && es.estimated ? '~' : ''}${fmtH(es ? es.hours : null)}</td>`;
-          }).join('')}</tr>`;
+          }).join('')}${(() => { const rr = db.general.find(e => e.type === 'maskinrunde' && e.date === d && e.bunker != null);
+            if (rr) return `<td class="num"><b>${fmtL(rr.bunker)}</b></td>`;
+            const be = bunkerEst(d); return `<td class="num">${be ? (be.estimated ? '~' : '') + fmtL(be.liters) : ''}</td>`; })()}</tr>`;
         }
         h += `</tbody></table><div class="pmeta">Uthevet = avlest. ~ = anslått ut fra snitt per døgn.${db.turnus ? ' Tallet etter datoen er turnusdag.' : ''}</div>`;
       }
@@ -1187,7 +1218,7 @@
         if (e.date !== day){ day = e.date; const k = turnusDay(day);
           h += `<tr class="pday"><td colspan="6">${dayName(day)} ${fmtDate(day)}${k ? ` · dag ${k} av ${db.turnus.on}` : ''}</td></tr>`; }
         h += `<tr><td>${esc(e.time || '')}</td><td>${m ? esc(m.name) : 'Generelt'}</td><td>${typeLabel(e.type).replace(/^\S+\s/,'')}</td>
-          <td class="pdesc">${e.desc ? esc(e.desc) : '<i>Ikke utfylt</i>'}${estLine(e).replace(/<[^>]+>/g,'') ? '<br><small>' + estLine(e).replace(/<[^>]+>/g,'') + '</small>' : ''}${e.cost ? ` (${Math.round(e.cost).toLocaleString('no-NO')} kr)` : ''}</td>
+          <td class="pdesc">${e.desc ? esc(e.desc) : '<i>Ikke utfylt</i>'}${estLine(e).replace(/<[^>]+>/g,'') ? '<br><small>' + estLine(e).replace(/<[^>]+>/g,'') + '</small>' : ''}${e.type === 'maskinrunde' ? '<br><small>' + bunkerLine(e).replace(/<[^>]+>/g,'').replace(/ – trykk for å føre/g,'') + '</small>' : ''}${e.cost ? ` (${Math.round(e.cost).toLocaleString('no-NO')} kr)` : ''}</td>
           <td class="num">${e.hours != null ? fmtH(e.hours) : ''}</td><td>${esc(e.by || '')}</td></tr>`;
       }
       h += '</tbody></table>';
@@ -1237,7 +1268,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '6';
+  const APP_VERSION = '7';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
