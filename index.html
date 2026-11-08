@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f3a4d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Maskindagbok</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%231f3a4d'/%3E%3Ctext x='50' y='68' font-size='56' text-anchor='middle'%3E%F0%9F%94%A7%3C/text%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#f3f5f7; --card:#fff; --ink:#1a2530; --muted:#6b7a88; --line:#dde3e8;
+    --brand:#1f3a4d; --accent:#e8892b; --ok:#2e8b57; --warn:#c56a12; --bad:#c0392b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px}
+  header{position:sticky;top:0;z-index:5;background:var(--brand);color:#fff;
+    padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;display:flex;align-items:center;gap:10px}
+  header h1{font-size:1.15rem;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  header button{background:none;border:0;color:#fff;font-size:1.4rem;padding:4px 8px;cursor:pointer}
+  main{padding:12px 12px 150px;max-width:640px;margin:0 auto}
+  h3{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:18px 4px 8px;display:flex;justify-content:space-between;align-items:center}
+  h3 button{background:none;border:0;color:var(--brand);font:inherit;font-weight:700;text-transform:none;letter-spacing:0;font-size:.9rem;cursor:pointer;padding:0}
+  .card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:10px;
+    box-shadow:0 1px 2px rgba(0,0,0,.06);border:1px solid var(--line)}
+  .machine{display:flex;align-items:center;gap:12px;cursor:pointer}
+  .machine .ico{width:44px;height:44px;border-radius:12px;background:#e7eef3;display:grid;place-items:center;font-size:1.4rem;flex:none}
+  .machine .info{flex:1;min-width:0}
+  .machine .name{font-weight:600}
+  .sub{color:var(--muted);font-size:.85rem}
+  .pill{display:inline-block;font-size:.75rem;padding:2px 8px;border-radius:99px;font-weight:600;white-space:nowrap}
+  .pill.ok{background:#e3f3ea;color:var(--ok)} .pill.warn{background:#fcefe2;color:var(--warn)} .pill.bad{background:#f9e3e1;color:var(--bad)}
+  .stats{display:flex;gap:8px;margin-bottom:10px}
+  .stat{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}
+  .stat b{display:block;font-size:1.25rem}
+  .stat span{font-size:.75rem;color:var(--muted)}
+  .stat.btnlike{cursor:pointer;border-color:var(--brand)}
+  .stat.btnlike span{color:var(--brand);font-weight:600}
+  .chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:6px}
+  .chip{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:6px 12px;font-size:.85rem;white-space:nowrap;cursor:pointer;color:var(--ink)}
+  .chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .entry,.job{cursor:pointer}
+  .entry .top,.job .top{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+  .entry .type,.job .jn{font-weight:600}
+  .entry .desc{margin-top:6px;white-space:pre-wrap;word-break:break-word}
+  .entry .meta,.job .meta{margin-top:6px;color:var(--muted);font-size:.8rem;display:flex;gap:12px;flex-wrap:wrap}
+  .job{border-left:5px solid var(--ok)} .job.warn{border-left-color:var(--warn)} .job.bad{border-left-color:var(--bad)}
+  .bar{height:6px;background:#e7eef3;border-radius:99px;margin-top:8px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--ok)} .job.warn .bar i{background:var(--warn)} .job.bad .bar i{background:var(--bad)}
+  .tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:#fff;border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
+  .tabs button{flex:1;background:none;border:0;font:inherit;font-size:.8rem;color:var(--muted);padding:8px 0 10px;cursor:pointer}
+  .tabs button b{display:block;font-size:1.3rem;font-weight:400}
+  .tabs button.on{color:var(--brand);font-weight:700}
+  .alert{border-radius:14px;padding:12px 14px;margin-bottom:10px;border:1px solid #f1d2b3;background:#fdf3e8}
+  .alert.bad{border-color:#efc4bf;background:#fcebe9}
+  .alert .ah{font-weight:700;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+  .alert .ah button{background:none;border:0;color:var(--muted);font-size:1.1rem;cursor:pointer;padding:0 2px}
+  .alert .al{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid rgba(0,0,0,.06);cursor:pointer;font-size:.9rem}
+  .alert .al span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tabs button{position:relative}
+  .hbadge{position:absolute;top:0;right:0;background:var(--bad);color:#fff;border-radius:99px;font-size:.65rem;font-weight:700;min-width:17px;height:17px;line-height:17px;padding:0 4px;text-align:center}
+  .hbadge.warn{background:var(--warn)}
+  .duerow{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:12px 2px;border-bottom:1px solid var(--line);cursor:pointer}
+  .duerow .dn{min-width:0}
+  .duerow .dn b{display:block;font-weight:600}
+  .badge{position:absolute;top:4px;left:calc(50% + 8px);background:var(--bad);color:#fff;border-radius:99px;font-size:.7rem;font-weight:700;min-width:18px;height:18px;line-height:18px;padding:0 5px}
+  .badge.warn{background:var(--warn)}
+  .quick{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+  .quick button{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 10px;font:inherit;font-weight:600;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:10px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+  .quick button b{font-size:1.5rem;font-weight:400;line-height:1}
+  .quick button:active{background:#e7eef3}
+  .quick .newday{grid-column:1 / -1;background:var(--brand);color:#fff;border-color:var(--brand);justify-content:center}
+  .quick .newday small{font-weight:400;opacity:.8}
+  .notechips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .nchip{display:inline-flex;align-items:center;border:1px solid var(--line);background:#f6f8fa;border-radius:12px;font:inherit;font-size:.88rem;color:var(--ink);text-align:left;cursor:pointer;max-width:100%}
+  .nchip span{padding:8px 4px 8px 12px;white-space:pre-wrap;word-break:break-word}
+  .nchip i{font-style:normal;color:var(--muted);padding:8px 10px 8px 6px;font-size:.8rem}
+  .nchip.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .nchip.on i{color:#cfe0ea}
+  .cal{margin-top:14px;border:1px solid var(--line);border-radius:14px;padding:10px}
+  .calnav{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .calnav b{text-transform:capitalize}
+  .calnav button{background:#e7eef3;border:0;border-radius:8px;width:36px;height:32px;font-size:1.1rem;cursor:pointer;color:var(--ink)}
+  .calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center}
+  .calgrid .wd{font-size:.7rem;color:var(--muted);padding:2px 0}
+  .calgrid .c{border-radius:8px;padding:5px 0 3px;font-size:.85rem;line-height:1.1;min-height:38px}
+  .calgrid .c small{display:block;font-size:.62rem;opacity:.85}
+  .calgrid .on{background:#dbe8f1;color:var(--brand);font-weight:600}
+  .calgrid .start{background:var(--brand);color:#fff}
+  .calgrid .off{color:var(--muted)}
+  .calgrid .today{outline:2px solid var(--accent);outline-offset:-2px}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:.75rem;color:var(--muted);margin-top:8px}
+  .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px}
+  .tours{margin:8px 0 0;padding:0;list-style:none;font-size:.88rem}
+  .tours li{padding:6px 2px;border-top:1px solid var(--line);display:flex;justify-content:space-between}
+  .day{font-size:.8rem;font-weight:700;color:var(--muted);margin:16px 4px 6px}
+  .jentry{display:flex;gap:12px;cursor:pointer}
+  .jentry .time{font-weight:700;font-variant-numeric:tabular-nums;min-width:44px;color:var(--brand)}
+  .jentry .body{flex:1;min-width:0}
+  .tag{display:inline-block;font-size:.75rem;background:#e7eef3;border-radius:6px;padding:1px 6px;margin-right:6px;color:var(--ink)}
+  .fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 76px);width:60px;height:60px;border-radius:50%;
+    background:var(--accent);color:#fff;border:0;font-size:2rem;box-shadow:0 4px 12px rgba(0,0,0,.25);cursor:pointer;z-index:6}
+  .empty{text-align:center;color:var(--muted);padding:40px 16px}
+  .empty .big{font-size:2.6rem}
+  input,select,textarea{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
+  textarea{min-height:90px;resize:vertical}
+  label{display:block;font-size:.85rem;color:var(--muted);margin:12px 0 4px}
+  .row{display:flex;gap:10px}.row>div{flex:1}
+  .search{margin-bottom:10px}
+  dialog{border:0;border-radius:18px;padding:0;width:min(560px,94vw);max-height:90vh}
+  dialog::backdrop{background:rgba(10,20,30,.45)}
+  .dlg{padding:18px}
+  .dlg h2{margin:0 0 4px;font-size:1.15rem}
+  .btns{display:flex;gap:8px;margin-top:18px}
+  .btn{flex:1;padding:12px;border-radius:10px;border:0;font:inherit;font-weight:600;cursor:pointer}
+  .btn.pri{background:var(--brand);color:#fff}
+  .btn.go{background:var(--ok);color:#fff;width:100%;margin-top:4px}
+  .btn.sec{background:#e7eef3;color:var(--ink)}
+  .btn.del{background:#f9e3e1;color:var(--bad);flex:0 0 auto;padding:12px 14px}
+  .menu-list button{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:14px 4px;font:inherit;color:var(--ink);cursor:pointer}
+  .hint{font-size:.8rem;color:var(--muted);margin-top:4px}
+  .jobdesc{white-space:pre-wrap;background:#f6f8fa;border-radius:10px;padding:10px 12px;margin:10px 0;font-size:.92rem}
+  .toast{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);background:#1a2530;color:#fff;padding:10px 16px;border-radius:10px;font-size:.9rem;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
+  .toast.show{opacity:1}
+  .toast.act{pointer-events:auto;cursor:pointer;display:flex;gap:14px;align-items:center}
+  .toast.act u{color:#ffd29a;text-decoration:none;font-weight:700;white-space:nowrap}
+  .missing{color:var(--warn);font-style:italic}
+</style>
+</head>
+<body>
+<header>
+  <button id="backBtn" aria-label="Tilbake" hidden>←</button>
+  <h1 id="title">Maskindagbok</h1>
+  <button id="editMachineBtn" aria-label="Rediger maskin" hidden>✎</button>
+  <button id="bellBtn" aria-label="Jobber som forfaller" style="position:relative">🔔<span id="bellBadge" class="hbadge" hidden></span></button>
+  <button id="menuBtn" aria-label="Meny">⋮</button>
+</header>
+
+<main id="view"></main>
+<button class="fab" id="fab" aria-label="Legg til">+</button>
+<nav class="tabs">
+  <button id="tabJournal" class="on"><b>📒</b>Dagbok</button>
+  <button id="tabMachines"><b>⚙️</b>Maskiner</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<!-- Maskin -->
+<dialog id="machineDlg"><form class="dlg" id="machineForm">
+  <h2 id="machineDlgTitle">Ny maskin</h2>
+  <label>Navn *</label><input name="name" required placeholder="F.eks. Scania generator 1">
+  <div class="row">
+    <div><label>Ikon</label>
+      <select name="icon">
+        <option>⚙️</option><option>🚜</option><option>🚤</option><option>🚗</option><option>🚛</option>
+        <option>🏍️</option><option>🔌</option><option>🤖</option><option>🛥️</option><option>🪚</option><option>🏗️</option>
+      </select></div>
+    <div><label>Snitt timer per døgn</label><input name="avgPerDay" type="number" inputmode="decimal" min="0" step="0.1" placeholder="F.eks. 6"></div>
+  </div>
+  <label>Modell / serienummer</label><input name="model" placeholder="Valgfritt">
+  <label>Notater</label><textarea name="notes" placeholder="Oljetype, filternummer …"></textarea>
+  <p class="hint">Snitt per døgn brukes til å anslå datoen en jobb forfaller.</p>
+  <div class="btns">
+    <button type="button" class="btn del" id="machineDelBtn" hidden>Slett</button>
+    <button type="button" class="btn sec" data-close>Avbryt</button>
+    <button type="submit" class="btn pri">Lagre</button>
+  </div>
+</form></dialog>
+
+<!-- Timeteller -->
+<dialog id="meterDlg"><form class="dlg" id="meterForm">
+  <h2>Oppdater timeteller</h2>
+  <p class="sub" id="meterInfo"></p>
+  <div class="row">
+    <div><label>Timer nå *</label><input name="hours" type="number" inputmode="decimal" min="0" step="0.1" required></div>
+    <div><label>Dato</label><input name="date" type="date" required></div>
+  </div>
+  <div class="btns">
+    <button type="button" class="btn sec" data-close>Avbryt</button>
+    <button type="submit" class="btn pri">Lagre</button>
+  </div>
+</form></dialog>
+
+<!-- Jobb -->
+<dialog id="jobDlg"><form class="dlg" id="jobForm">
+  <h2 id="jobDlgTitle">Ny jobb</h2>
+  <label>Jobb *</label><input name="name" required placeholder="F.eks. Smøreoljesystem">
+  <div class="row">
+    <div><label>Type</label><select name="kind"><option value="service">🛠️ Service</option><option value="inspeksjon">🔍 Kontroll</option></select></div>
+    <div><label>Intervall (timer) *</label><input name="interval" type="number" inputmode="numeric" min="1" required></div>
+  </div>
+  <label>Sist utført ved (timer)</label><input name="lastHours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="0 hvis aldri">
+  <label>Beskrivelse</label><textarea name="desc" placeholder="Hva skal gjøres"></textarea>
+  <div class="btns">
+    <button type="button" class="btn del" id="jobDelBtn" hidden>Slett</button>
+    <button type="button" class="btn sec" data-close>Avbryt</button>
+    <button type="submit" class="btn pri">Lagre</button>
+  </div>
+</form></dialog>
+
+<!-- Utfør jobb -->
+<dialog id="doneDlg"><form class="dlg" id="doneForm">
+  <h2 id="doneTitle"></h2>
+  <p class="sub" id="doneSub" style="margin:2px 0 0"></p>
+  <div id="doneDesc"></div>
+  <div class="row">
+    <div><label>Timeteller nå</label><input name="hours" type="number" inputmode="decimal" min="0" step="0.1"></div>
+    <div><label>Utført av</label><input name="by" placeholder="Valgfritt"></div>
+  </div>
+  <label>Hva ble gjort? (valgfritt)</label>
+  <div class="notechips" id="noteChips"></div>
+  <textarea name="note" style="min-height:70px" placeholder="F.eks. byttet impeller og pakning, olje 15W-40"></textarea>
+  <button type="submit" class="btn go" style="margin-top:14px;padding:14px;font-size:1.05rem">✓ Utført</button>
+  <div class="btns" style="margin-top:8px">
+    <button type="button" class="btn sec" id="doneEditBtn">Rediger jobb</button>
+    <button type="button" class="btn sec" data-close>Lukk</button>
+  </div>
+</form></dialog>
+
+<!-- Logg -->
+<dialog id="entryDlg"><form class="dlg" id="entryForm">
+  <h2 id="entryDlgTitle">Ny loggføring</h2>
+  <p class="hint" id="entryJobHint" hidden></p>
+  <div class="row">
+    <div><label>Dato</label><input name="date" type="date"></div>
+    <div><label>Klokkeslett</label><input name="time" type="time"></div>
+  </div>
+  <div class="row">
+    <div style="flex:1.6"><label>Maskin</label><select name="machine"></select></div>
+    <div><label>Timeteller</label><input name="hours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="Timer"></div>
+  </div>
+  <label>Type *</label>
+  <select name="type" required></select>
+  <label>Hva ble gjort / observert</label>
+  <textarea name="desc" placeholder="F.eks. Skiftet motorolje og oljefilter"></textarea>
+  <div class="row">
+    <div><label>Utført av</label><input name="by" placeholder="Valgfritt"></div>
+    <div><label>Kostnad (kr)</label><input name="cost" type="number" inputmode="decimal" min="0" step="1" placeholder="Valgfritt"></div>
+  </div>
+  <div class="btns">
+    <button type="button" class="btn del" id="entryDelBtn" hidden>Slett</button>
+    <button type="button" class="btn sec" data-close>Avbryt</button>
+    <button type="submit" class="btn pri">Lagre</button>
+  </div>
+</form></dialog>
+
+<!-- Turnus -->
+<dialog id="turnusDlg"><form class="dlg" id="turnusForm">
+  <h2>🗓️ Turnus</h2>
+  <p class="sub" style="margin:4px 0 0">«Neste dag» hopper over fridagene og starter på dag 1 når en ny tur begynner.</p>
+  <label>Første dag på en tur *</label><input name="start" type="date" required>
+  <div class="row">
+    <div><label>Dager på *</label><input name="on" type="number" inputmode="numeric" min="1" required placeholder="14"></div>
+    <div><label>Dager fri *</label><input name="off" type="number" inputmode="numeric" min="0" required placeholder="14"></div>
+  </div>
+  <p class="hint" id="turnusPreview"></p>
+  <div class="cal" id="turnusCal"></div>
+  <div class="btns">
+    <button type="button" class="btn del" id="turnusDelBtn">Fjern</button>
+    <button type="button" class="btn sec" data-close>Avbryt</button>
+    <button type="submit" class="btn pri">Lagre</button>
+  </div>
+</form></dialog>
+
+<!-- Varsel -->
+<dialog id="dueDlg"><div class="dlg">
+  <h2>🔔 Jobber som forfaller</h2>
+  <div id="dueList"></div>
+  <div class="btns"><button class="btn sec" data-close>Lukk</button></div>
+</div></dialog>
+
+<!-- Meny -->
+<dialog id="menuDlg"><div class="dlg">
+  <h2>Meny</h2>
+  <div class="menu-list">
+    <button id="exportBtn">⬇️ Last ned sikkerhetskopi (JSON)</button>
+    <button id="importBtn">⬆️ Gjenopprett fra sikkerhetskopi</button>
+    <button id="csvBtn">📄 Eksporter logg som CSV (Excel)</button>
+    <button id="turnusBtn">🗓️ Turnus</button>
+    <button id="seedBtn">⚙️ Legg inn Scania- og John Deere-maskinene fra CCOM</button>
+  </div>
+  <p class="hint" id="ver" style="float:right;margin:0"></p>
+  <p class="hint">Alt lagres kun på denne telefonen, i nettleseren. Ta sikkerhetskopi av og til, så mister du ingenting hvis nettleserdata slettes.</p>
+  <div class="btns"><button class="btn sec" data-close>Lukk</button></div>
+</div></dialog>
+
+<dialog id="askDlg"><div class="dlg">
+  <p id="askText" style="margin:0 0 4px"></p>
+  <div class="btns"><button class="btn sec" id="askNo">Avbryt</button><button class="btn pri" id="askYes">OK</button></div>
+</div></dialog>
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+
+<script>
+(() => {
+  const KEY = 'maskindagbok.v1';
+  const SEED = [{"id": "ccom-601.01", "name": "Scania generator 1", "icon": "⚙️", "model": "Scania DI13 074M · SFI 601.01", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": {"hours": 4343, "date": "2026-11-02"}, "avgPerDay": 6, "entries": [], "created": 0, "jobs": [{"id": "ccom-8dc50e16", "name": "Zinker / Offeranode", "kind": "inspeksjon", "interval": 160, "lastHours": 4305, "desc": "Kontrollere zinker / offeranoder.\nByttes v/ 2/3 (60-70%) slitasje\nZinker er plassert i akterkant av sjøvannskjøler på undersiden og i forkant av varmeveksler på undersiden. (Gule/messing bolthoder)"}, {"id": "ccom-fe694324", "name": "Skifte drivstoffiltre", "kind": "service", "interval": 1000, "lastHours": 3856, "desc": "Skifte finfilter og forfilter"}, {"id": "ccom-bd4c0d0f", "name": "Sjøvannspumpe / Impeller", "kind": "inspeksjon", "interval": 500, "lastHours": 4055, "desc": "Kontrollere skovlhjul på sjøvannspumpe / impeller\nSjekk pumpehuset for slitasjer/skader og tæring\nSkiftes etter behov"}, {"id": "ccom-b6743607", "name": "Drivreim", "kind": "inspeksjon", "interval": 1000, "lastHours": 4124, "desc": "Kontrollere drivreim for slitasje og skader\nByttes ved slitasje ned til strengen"}, {"id": "ccom-2e1cbf85", "name": "Kjølevæske", "kind": "service", "interval": 6000, "lastHours": 0, "desc": "Tappe ned kjølevæske, rengjøre systemet med ferskvann\nFylle på ny kjølevæske, kjøre motor i 10-15 min. deretter etterfylle kjølevæske dersom nødvendig"}, {"id": "ccom-e68e7475", "name": "Ventilklaring og innsprøytningsventil", "kind": "inspeksjon", "interval": 2000, "lastHours": 3373, "desc": "Kontroll og justering av ventilklaring\nInnsugsventil: 0,45 mm \nEksosventil: 0,7 mm.\nTiltrekkingsmoment for låsemutter: 35 Nm\nJusteringsrekkefølge: 6 - 2 - 4 - 1 - 5 - 3\nSe s.73-75 i Instuksjonsbok for DI13\nInnsprøytningsventil\nJusteres slik at stempelet er i fluky med den øvre overflaten på verktøyet\nTiltrekkingsmoment for låsemutter: 39 Nm\nJusteringsrekkefølge: 2 - 4 - 1 - 5 - 3 - 6\nSe s.76 og 77 i instruksjonsbok for DI13"}, {"id": "ccom-e8e0f0c2", "name": "Luftfilter", "kind": "service", "interval": 1000, "lastHours": 3856, "desc": "Sjekke luftfilter for skader, slitasje og om det er tett\nSkifte dersom nødvendig"}, {"id": "ccom-8cb135cb", "name": "Smøreoljesystem", "kind": "service", "interval": 500, "lastHours": 3866, "desc": "Skifte smøreolje, filter og rengjøre sentrifugalfilter.\nTa oljeprøve"}, {"id": "ccom-5752a052", "name": "Tappe vannutskiller-forfilter", "kind": "inspeksjon", "interval": 500, "lastHours": 3866, "desc": ""}]}, {"id": "ccom-601.02", "name": "Scania generator 2", "icon": "⚙️", "model": "Scania DI13 074M · SFI 601.02", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": {"hours": 5219, "date": "2026-11-02"}, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-5fb92a5f", "name": "Sjøvannspumpe / Impeller", "kind": "inspeksjon", "interval": 500, "lastHours": 4714, "desc": "Kontrollere skovlhjul på sjøvannspumpe / impeller\nSjekk pumpehuset for slitasjer/skader og tæring\nSkiftes etter behov"}, {"id": "ccom-4109356c", "name": "Smøreoljesystem", "kind": "service", "interval": 500, "lastHours": 4793, "desc": "Skifte smørolje, filter og rengjøre sentrifugalfilter\nTa oljeprøve"}, {"id": "ccom-c2215a9b", "name": "Drivreim", "kind": "inspeksjon", "interval": 1000, "lastHours": 4289, "desc": "Kontrollere drivreim for slitasje og skader\nByttes ved slitasje ned til strengen"}, {"id": "ccom-c02b7104", "name": "Kjølevæske", "kind": "service", "interval": 6000, "lastHours": 0, "desc": "Tappe ned kjølevæske, rengjøre systemet med ferskvann\nFylle på ny kjølevæske, kjøre motor i 10-15 min. deretter etterfylle kjølevæske dersom nødvendig"}, {"id": "ccom-0b73c072", "name": "Luftfilter", "kind": "service", "interval": 1000, "lastHours": 5145, "desc": "Sjekke luftfilter for skader, slitasje og om det er tett\nSkifte dersom nødvendig"}, {"id": "ccom-8992130c", "name": "Zinker / Offeranode", "kind": "inspeksjon", "interval": 160, "lastHours": 5093, "desc": "Kontrollere zinker / offeranoder.\nByttes v/ 2/3 (60-70%) slitasje\nZinker er plassert i akterkant av sjøvannskjøler på undersiden og i forkant av varmeveksler på undersiden. (Gule/messing bolthoder)"}, {"id": "ccom-0ffc1f01", "name": "Ventilklaring og innsprøytningsventil", "kind": "inspeksjon", "interval": 2000, "lastHours": 3761, "desc": "Kontroll og justering av ventilklaring\nInnsugsventil: 0,45 mm \nEksosventil: 0,7 mm.\nTiltrekkingsmoment for låsemutter: 35 Nm\nJusteringsrekkefølge: 6 - 2 - 4 - 1 - 5 - 3\nSe s.73-75 i Instuksjonsbok for DI13\nInnsprøytningsventil\nJusteres slik at stempelet er i fluky med den øvre overflaten på verktøyet\nTiltrekkingsmoment for låsemutter: 39 Nm\nJusteringsrekkefølge: 2 - 4 - 1 - 5 - 3 - 6\nSe s.76 og 77 i instruksjonsbok for DI13"}, {"id": "ccom-5426f719", "name": "Skifte drivstoffiltre", "kind": "service", "interval": 1000, "lastHours": 5145, "desc": "Skifte finfilter og forfilter"}, {"id": "ccom-89493fa2", "name": "Tappe vannutskiller-forfilter", "kind": "inspeksjon", "interval": 500, "lastHours": 4891, "desc": "Tappe ut vann fra vannutskiller-forfilter til scania"}]}, {"id": "ccom-601.03", "name": "Scania generator 3", "icon": "⚙️", "model": "Scania DI13 074M · SFI 601.03", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": {"hours": 5423, "date": "2026-11-02"}, "avgPerDay": null, "entries": [], "created": 0, "jobs": [{"id": "ccom-34e25f4b", "name": "Drivreim", "kind": "inspeksjon", "interval": 1000, "lastHours": 4449, "desc": "Kontrollere drivreim for slitasje og skader\nByttes ved slitasje ned til strengen"}, {"id": "ccom-c69d386a", "name": "Ventilklaring og innsprøytningsventil", "kind": "inspeksjon", "interval": 2000, "lastHours": 3772, "desc": "Kontroll og justering av ventilklaring\nInnsugsventil: 0,45 mm \nEksosventil: 0,7 mm.\nTiltrekkingsmoment for låsemutter: 35 Nm\nJusteringsrekkefølge: 6 - 2 - 4 - 1 - 5 - 3\nSe s.73-75 i Instuksjonsbok for DI13\nInnsprøytningsventil\nJusteres slik at stempelet er i fluky med den øvre overflaten på verktøyet\nTiltrekkingsmoment for låsemutter: 39 Nm\nJusteringsrekkefølge: 2 - 4 - 1 - 5 - 3 - 6\nSe s.76 og 77 i instruksjonsbok for DI13"}, {"id": "ccom-e9f31917", "name": "Zinker / Offeranode", "kind": "inspeksjon", "interval": 160, "lastHours": 5396, "desc": "Kontrollere zinker / offeranoder.\nByttes v/ 2/3 (60-70%) slitasje\nZinker er plassert i akterkant av sjøvannskjøler på undersiden og i forkant av varmeveksler på undersiden. (Gule/messing bolthoder)"}, {"id": "ccom-64283d7e", "name": "Smøreoljesystem", "kind": "service", "interval": 500, "lastHours": 4938, "desc": "Skifte smørolje, filter og rengjøre sentrifugalfilter\nTa oljeprøve"}, {"id": "ccom-57a24dae", "name": "Skifte drivstoffiltre", "kind": "service", "interval": 1000, "lastHours": 5396, "desc": "Skifte finfilter og forfilter"}, {"id": "ccom-048da0d2", "name": "Sjøvannspumpe / Impeller", "kind": "inspeksjon", "interval": 500, "lastHours": 5050, "desc": "Kontrollere skovlhjul på sjøvannspumpe / impeller\nSjekk pumpehuset for slitasjer/skader og tæring\nSkiftes etter behov"}, {"id": "ccom-8ddc2742", "name": "Luftfilter", "kind": "service", "interval": 1000, "lastHours": 5396, "desc": "Sjekke luftfilter for skader, slitasje og om det er tett\nSkifte dersom nødvendig"}, {"id": "ccom-57b78d49", "name": "Kjølevæske", "kind": "service", "interval": 6000, "lastHours": 0, "desc": "Tappe ned kjølevæske, rengjøre systemet med ferskvann\nFylle på ny kjølevæske, kjøre motor i 10-15 min. deretter etterfylle kjølevæske dersom nødvendig"}, {"id": "ccom-c5c277ce", "name": "Tappe vannutskiller-forfilter", "kind": "inspeksjon", "interval": 500, "lastHours": 5396, "desc": "Tappe ut vann fra vannutskiller-forfilter til scania"}]}, {"id": "ccom-65.001", "name": "John Deere havneaggregat", "icon": "⚙️", "model": "John Deere 6068 TFM50 6.8 L · SFI 65.001", "interval": null, "startHours": null, "notes": "Importert fra CCOM (Ringahav) 2.11.2026.", "meter": {"hours": 6062, "date": "2026-11-02"}, "avgPerDay": 12, "entries": [], "created": 0, "jobs": [{"id": "ccom-72de0d85", "name": "Visuell kontroll og sjekk", "kind": "inspeksjon", "interval": 250, "lastHours": 6019, "desc": "Sjekk motorlabber, etterstramme dersom nødvendig (Nm)\nSjekk drivreim for slitasje, skader og etterstramme dersom nødvendig ()\nSjekk jordingskoblinger\nSjekk zink / offeranode\nSjekk batterikoblinger (smøres med vaseline)"}, {"id": "ccom-7cf9911e", "name": "Ventilklaring", "kind": "inspeksjon", "interval": 2000, "lastHours": 6019, "desc": "Kontrollere og justere ventilklaring"}, {"id": "ccom-10b5914d", "name": "Innsprøytningsdyser", "kind": "service", "interval": 10000, "lastHours": 0, "desc": "Skifte innsprøytningsdyser."}, {"id": "ccom-0b80a681", "name": "Ladeluftkjøler og varmeveksler", "kind": "inspeksjon", "interval": 500, "lastHours": 6019, "desc": "Sjekk og rengjør varmeveksler og ladeluftkjøler"}, {"id": "ccom-3ff5220d", "name": "Luftfilter", "kind": "service", "interval": 1000, "lastHours": 5190, "desc": "Sjekke luftfilter, skiftes v/ skade eller dersom det begynner å bli tett"}, {"id": "ccom-ae42fa4b", "name": "Kjølesystem", "kind": "service", "interval": 6000, "lastHours": 6000, "desc": "Tappe ned kjølevæske, flushe system m/ ferskvann, fylle på ny kjølevæske\nCool-gard 2 kjølevæske har levetid på 6000 timer."}, {"id": "ccom-1e0557d5", "name": "Skifte forfilter og finfilter", "kind": "service", "interval": 1000, "lastHours": 4967, "desc": "Skifte dieselfilter (fin- og forfilter)"}, {"id": "ccom-b0aebda9", "name": "Sjøvannspumpe", "kind": "inspeksjon", "interval": 1000, "lastHours": 4967, "desc": "Kontroll og sjekk av sjøvannspumpe, skifte impeller v/ slitasje og skader."}, {"id": "ccom-5b4896ea", "name": "Smøreoljesystem", "kind": "service", "interval": 500, "lastHours": 5639, "desc": "Skifte smøreolje og filter"}, {"id": "ccom-5b56d9d9", "name": "Tappe ut av vannutskiller-forfilter", "kind": "inspeksjon", "interval": 500, "lastHours": 5660, "desc": "Tappe ut vann fra vannutskiller-forfilter\n24mm fastnøkkel passer til bolten."}]}];
+  const TYPES = [
+    ['maskinrunde','🔄 Maskinrunde'],['service','🛠️ Service'],['vedlikehold','🔧 Vedlikehold'],['oljefyll','🫗 Fylt olje'],['hendelse','⚠️ Hendelse'],['olje','🛢️ Oljeskift'],['reparasjon','🔧 Reparasjon'],
+    ['feil','⚠️ Feil / avvik'],['inspeksjon','🔍 Kontroll'],['drivstoff','⛽ Drivstoff'],
+    ['deler','📦 Deler byttet'],['drift','⏱️ Drift / bruk'],['timer','⏱️ Timeteller'],['annet','📝 Annet']
+  ];
+  const QUICK = [
+    {type:'oljefyll', label:'Fylt olje', icon:'🫗', ph:'Hvor mye og hvilken olje? F.eks. 2 L 15W-40'},
+    {type:'hendelse', label:'Hendelse', icon:'⚠️', ph:'Hva skjedde?'},
+    {type:'vedlikehold', label:'Vedlikehold', icon:'🔧', ph:'Hva ble gjort?'},
+    {type:'service', label:'Service', icon:'🛠️', ph:'Hva ble gjort på servicen?'}
+  ];
+  const typeLabel = t => (TYPES.find(x => x[0] === t) || [, '📝 ' + t])[1];
+
+  // ---------- Lagring ----------
+  const clone = o => JSON.parse(JSON.stringify(o));
+  let db = load();
+  function fix(m){ m.entries = Array.isArray(m.entries) ? m.entries : []; m.jobs = Array.isArray(m.jobs) ? m.jobs : []; m.id = m.id || uid(); return m; }
+  function load(){
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw){ const d = JSON.parse(raw); if (d && Array.isArray(d.machines)){ d.machines.forEach(fix); d.general = Array.isArray(d.general) ? d.general : []; return d; } }
+    } catch(e){}
+    return { machines: clone(SEED).map(fix), general: [] };
+  }
+  function save(){
+    try { localStorage.setItem(KEY, JSON.stringify(db)); }
+    catch(e){ toast('Kunne ikke lagre på denne enheten'); }
+  }
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+  const nowTime = () => { const d = new Date(); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); };
+  const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
+  const num = v => (v === '' || v == null || isNaN(+v)) ? null : +v;
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const fmtDate = s => { if(!s) return ''; const [y,m,d] = s.split('-'); return `${+d}.${+m}.${y}`; };
+  const fmtH = h => h == null ? '–' : (Math.round(h*10)/10).toLocaleString('no-NO');
+  const MONTHS = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
+
+  // ---------- Beregninger ----------
+  function meterInfo(m){
+    // Høyeste kjente timeteller og datoen den gjelder
+    let h = num(m.startHours), date = null;
+    if (m.meter && m.meter.hours != null && (h == null || m.meter.hours >= h)){ h = m.meter.hours; date = m.meter.date; }
+    for (const e of m.entries) if (e.hours != null && (h == null || e.hours > h || (e.hours === h && e.date > (date||'')))){ h = e.hours; date = e.date; }
+    return { hours: h, date };
+  }
+  const currentHours = m => meterInfo(m).hours;
+
+  function jobState(m, j){
+    const cur = currentHours(m) ?? 0;
+    const next = (j.lastHours || 0) + j.interval;
+    const left = next - cur;
+    // Varsel: 10 % av intervallet for jobber på 500 t eller mer, 20 % for kortere intervall
+    const warnAt = j.interval * (j.interval >= 500 ? 0.10 : 0.20);
+    const cls = left < 0 ? 'bad' : left <= warnAt ? 'warn' : 'ok';
+    let est = '';
+    const avg = num(m.avgPerDay), mi = meterInfo(m);
+    if (avg > 0 && left > 0 && mi.date){
+      const d = new Date(mi.date + 'T12:00:00'); d.setDate(d.getDate() + Math.round(left / avg));
+      est = `~${d.getDate()}. ${MONTHS[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? ' ' + d.getFullYear() : ''}`;
+      if (d.toISOString().slice(0,10) < today()) est += ', trolig passert';
+    }
+    const text = left < 0 ? `${fmtH(-left)} t over` : `om ${fmtH(left)} t`;
+    const used = Math.min(1, Math.max(0, (cur - (j.lastHours || 0)) / j.interval));
+    return { next, left, cls, text, est, used };
+  }
+  function machineAlert(m){
+    if (!m.jobs.length) return null;
+    const st = m.jobs.map(j => ({j, s: jobState(m,j)})).sort((a,b) => a.s.left - b.s.left);
+    const over = st.filter(x => x.s.left < 0).length, soon = st.filter(x => x.s.cls === 'warn').length;
+    if (over) return {cls:'bad', text:`${over} jobb${over>1?'er':''} forfalt`};
+    if (soon) return {cls:'warn', text:`${soon} jobb${soon>1?'er':''} snart – ${st[0].j.name} ${st[0].s.text}`};
+    return {cls:'ok', text:`Neste: ${st[0].j.name} ${st[0].s.text}`};
+  }
+  function dueJobs(){
+    return db.machines.flatMap(m => m.jobs.map(j => ({m, j, s: jobState(m,j)})))
+      .filter(x => x.s.cls !== 'ok').sort((a,b) => a.s.left - b.s.left);
+  }
+  const sortEntries = arr => [...arr].sort((a,b) => b.date.localeCompare(a.date) || (b.time||'').localeCompare(a.time||'') || ((b.hours??0)-(a.hours??0)) || ((b.created||0)-(a.created||0)));
+  const allEntries = () => [
+    ...db.general.map(e => ({e, m:null})),
+    ...db.machines.flatMap(m => m.entries.map(e => ({e, m})))
+  ].sort((x,y) => sortEntries([x.e,y.e])[0] === x.e ? -1 : 1);
+  const WD = ['søndag','mandag','tirsdag','onsdag','torsdag','fredag','lørdag'];
+  function dayLabel(s){
+    const t = today(), d = new Date(s + 'T12:00:00'), y = new Date(t + 'T12:00:00'); y.setDate(y.getDate()-1);
+    if (s === t) return 'I dag';
+    if (s === y.toISOString().slice(0,10)) return 'I går';
+    const w = WD[d.getDay()];
+    return w.charAt(0).toUpperCase() + w.slice(1) + ` ${d.getDate()}. ${MONTHS[d.getMonth()]}${d.getFullYear() !== new Date().getFullYear() ? ' ' + d.getFullYear() : ''}`;
+  }
+
+  const $ = id => document.getElementById(id);
+  // ---------- Visning ----------
+  const view = document.getElementById('view');
+  const titleEl = document.getElementById('title');
+  const backBtn = document.getElementById('backBtn');
+  const editMachineBtn = document.getElementById('editMachineBtn');
+  let state = { tab: 'journal', machineId: null, filter: 'alle', q: '' };
+  const machineById = id => db.machines.find(x => x.id === id) || null;
+  const curMachine = () => db.machines.find(x => x.id === state.machineId);
+
+  function render(){
+    $('tabJournal').classList.toggle('on', state.tab === 'journal');
+    $('tabMachines').classList.toggle('on', state.tab !== 'journal');
+    const due = dueJobs(), over = due.filter(x => x.s.cls === 'bad').length;
+    const bb = $('bellBadge');
+    bb.hidden = !due.length; bb.textContent = due.length; bb.className = 'hbadge' + (over ? '' : ' warn');
+    const m = curMachine();
+    if (state.tab === 'journal') return renderJournal();
+    if (!m) { state.machineId = null; renderList(); } else renderMachine(m);
+  }
+
+  function renderJournal(){
+    titleEl.textContent = 'Dagbok';
+    backBtn.hidden = true; editMachineBtn.hidden = true;
+    const q = state.q.trim().toLowerCase();
+    let list = allEntries();
+    if (q) list = list.filter(({e,m}) => [e.desc, e.by, typeLabel(e.type), m ? m.name : 'generelt'].join(' ').toLowerCase().includes(q));
+    let html = '';
+    if (!q) html = `<div class="quick">${QUICK.map((x,i) => `<button data-quick="${i}"><b>${x.icon}</b>${x.label}</button>`).join('')}
+      <button class="newday" id="newDayBtn"><b>🌅</b>Neste dag <small>· ${(() => { const d = nextDayDate(), k = turnusDay(d);
+        return d > today() ? (db.turnus && !turnusDay(today()) ? 'fri – tur starter ' + fmtDate(d) : 'i dag er ført') : (k ? `dag ${k} av ${db.turnus.on}, ` : '') + 'maskinrunde kl. 07:00'; })()}</small></button></div>` + html;
+    html += `<input class="search" id="search" type="search" placeholder="Søk i dagboka …" value="${esc(state.q)}">`;
+    if (!list.length){
+      html += `<div class="empty"><div class="big">📒</div><p>${q ? 'Ingen treff.' : '<b>Dagboka er tom</b></p><p>Trykk på <b>+</b> for å skrive den første innføringen.'}</p></div>`;
+    } else {
+      let day = null;
+      for (const {e,m} of list){
+        if (e.date !== day){ day = e.date; const k = turnusDay(day); html += `<div class="day">${dayLabel(day)} · ${fmtDate(day)}${k ? ` · dag ${k}/${db.turnus.on}` : ''}</div>`; }
+        html += `<div class="card jentry" data-eid="${e.id}" data-mid="${m ? m.id : ''}">
+          <div class="time">${esc(e.time || '–')}</div>
+          <div class="body">
+            <div><span class="tag">${m ? esc(m.name) : 'Generelt'}</span><span class="sub">${typeLabel(e.type)}</span></div>
+            <div class="desc" style="margin-top:4px;white-space:pre-wrap;word-break:break-word">${e.desc ? esc(e.desc) : '<span class="missing">Ikke utfylt – trykk for å fylle inn</span>'}</div>
+            ${e.hoursMissing ? '<div class="missing sub" style="margin-top:2px">Timeteller ikke fylt inn</div>' : ''}
+            ${(e.hours != null || e.by || e.cost) ? `<div class="meta sub" style="margin-top:4px;display:flex;gap:12px;flex-wrap:wrap">
+              ${e.hours != null ? `<span>⏱️ ${fmtH(e.hours)} t</span>` : ''}${e.by ? `<span>👤 ${esc(e.by)}</span>` : ''}${e.cost ? `<span>💰 ${Math.round(e.cost).toLocaleString('no-NO')} kr</span>` : ''}</div>` : ''}
+          </div></div>`;
+      }
+    }
+    view.innerHTML = html;
+    bindSearch();
+  }
+  function bindSearch(){
+    const s = document.getElementById('search');
+    if (s) s.addEventListener('input', e => {
+      state.q = e.target.value; const pos = e.target.selectionStart;
+      render(); const n = document.getElementById('search'); n.focus(); n.setSelectionRange(pos,pos);
+    });
+  }
+
+  function renderList(){
+    titleEl.textContent = 'Maskiner';
+    backBtn.hidden = true; editMachineBtn.hidden = true;
+    if (!db.machines.length){
+      view.innerHTML = `<div class="empty"><div class="big">🔧</div>
+        <p><b>Ingen maskiner ennå</b></p><p>Trykk på <b>+</b> for å legge til den første maskinen din.</p></div>`;
+      return;
+    }
+    view.innerHTML = db.machines.map(m => {
+      const al = machineAlert(m);
+      const mi = meterInfo(m);
+      return `<div class="card machine" data-id="${m.id}">
+        <div class="ico">${esc(m.icon || '⚙️')}</div>
+        <div class="info">
+          <div class="name">${esc(m.name)}</div>
+          <div class="sub">${fmtH(mi.hours)} t${mi.date ? ' (' + fmtDate(mi.date) + ')' : ''} · ${m.jobs.length} jobber · ${m.entries.length} i loggen</div>
+          ${al ? `<div style="margin-top:6px"><span class="pill ${al.cls}">${esc(al.text)}</span></div>` : ''}
+        </div>
+        <div class="sub">›</div></div>`;
+    }).join('');
+  }
+
+  function renderMachine(m){
+    titleEl.textContent = `${m.icon || '⚙️'} ${m.name}`;
+    backBtn.hidden = false; editMachineBtn.hidden = false;
+    const mi = meterInfo(m);
+    const cost = m.entries.reduce((s,e) => s + (e.cost || 0), 0);
+    const used = new Set(m.entries.map(e => e.type));
+    const q = state.q.trim().toLowerCase();
+    let list = sortEntries(m.entries);
+    if (state.filter !== 'alle') list = list.filter(e => e.type === state.filter);
+    if (q) list = list.filter(e => [e.desc, e.by, typeLabel(e.type)].join(' ').toLowerCase().includes(q));
+    const jobs = m.jobs.map(j => ({j, s: jobState(m,j)})).sort((a,b) => a.s.left - b.s.left);
+
+    view.innerHTML = `
+      <div class="stats">
+        <div class="stat btnlike" id="meterBtn"><b>${fmtH(mi.hours)}</b><span>timer · oppdater</span></div>
+        <div class="stat"><b>${m.entries.length}</b><span>i loggen</span></div>
+        <div class="stat"><b>${cost ? Math.round(cost).toLocaleString('no-NO') : '–'}</b><span>kr totalt</span></div>
+      </div>
+      ${mi.date ? `<p class="sub" style="margin:-4px 4px 4px">Timeteller sist oppdatert ${fmtDate(mi.date)}${num(m.avgPerDay) ? ` · snitt ${fmtH(num(m.avgPerDay))} t/døgn` : ''}</p>` : ''}
+
+      <h3>Jobber etter kjøretimer <button id="addJobBtn">+ Ny jobb</button></h3>
+      ${jobs.length ? jobs.map(({j,s}) => `
+        <div class="card job ${s.cls}" data-jid="${j.id}">
+          <div class="top"><span class="jn">${esc(j.name)}</span><span class="pill ${s.cls}">${s.text}</span></div>
+          <div class="meta">
+            <span>Forfaller ved ${fmtH(s.next)} t${s.est ? ' (' + s.est + ')' : ''}</span>
+            <span>Hver ${fmtH(j.interval)} t</span>
+            <span>${j.kind === 'service' ? '🛠️ Service' : '🔍 Kontroll'}</span>
+          </div>
+          <div class="bar"><i style="width:${Math.round(s.used*100)}%"></i></div>
+        </div>`).join('')
+        : `<p class="sub" style="margin:0 4px">Ingen planlagte jobber. Legg til f.eks. oljeskift hver 500. time.</p>`}
+
+      ${(m.model || m.notes) ? `<h3>Om maskinen</h3><div class="card">${m.model ? `<div><b>${esc(m.model)}</b></div>` : ''}
+        ${m.notes ? `<div class="sub" style="white-space:pre-wrap;margin-top:4px">${esc(m.notes)}</div>` : ''}</div>` : ''}
+
+      <h3>Logg</h3>
+      ${m.entries.length > 3 ? `<input class="search" id="search" type="search" placeholder="Søk i loggen …" value="${esc(state.q)}">` : ''}
+      ${used.size > 1 ? `<div class="chips">
+        <button class="chip ${state.filter==='alle'?'on':''}" data-f="alle">Alle</button>
+        ${TYPES.filter(t => used.has(t[0])).map(t => `<button class="chip ${state.filter===t[0]?'on':''}" data-f="${t[0]}">${t[1]}</button>`).join('')}
+      </div>` : ''}
+      <div id="entries">${list.length ? list.map(e => `
+        <div class="card entry" data-eid="${e.id}">
+          <div class="top"><span class="type">${typeLabel(e.type)}</span><span class="sub">${fmtDate(e.date)}${e.time ? ' kl. ' + esc(e.time) : ''}</span></div>
+          <div class="desc">${e.desc ? esc(e.desc) : '<span class="missing">Ikke utfylt – trykk for å fylle inn</span>'}</div>
+          <div class="meta">
+            ${e.hours != null ? `<span>⏱️ ${fmtH(e.hours)} t</span>` : ''}
+            ${e.by ? `<span>👤 ${esc(e.by)}</span>` : ''}
+            ${e.cost ? `<span>💰 ${Math.round(e.cost).toLocaleString('no-NO')} kr</span>` : ''}
+          </div></div>`).join('')
+        : `<div class="empty" style="padding:20px"><p>${m.entries.length ? 'Ingen treff.' : 'Ingen loggføringer ennå. Trykk <b>+</b> for å skrive, eller trykk på en jobb og så <b>✓ Utført</b>.'}</p></div>`}
+      </div>`;
+
+    bindSearch();
+  }
+
+  view.addEventListener('click', e => {
+    const t = e.target;
+    if (t.closest('#meterBtn')) return openMeterDlg();
+    if (t.closest('#newDayBtn')) return newDay();
+    const qb = t.closest('[data-quick]'); if (qb){
+      const p = QUICK[+qb.dataset.quick], mid = lastMachine(), m = machineById(mid);
+      const en = { id: uid(), created: Date.now(), date: today(), time: nowTime(), type: p.type, desc: '', by: '', cost: null, hours: null };
+      (m ? m.entries : db.general).push(en); save(); render();
+      return toast(`${p.icon} ${p.label} kl. ${en.time}${m ? ' – ' + m.name : ''}`, 'Fyll inn', () => openEntryDlg(en.id, null, mid || null, p));
+    }
+    const g = t.closest('[data-goto]'); if (g){ const m = machineById(g.dataset.goto); return openDoneDlg(m, m && m.jobs.find(x => x.id === g.dataset.jid)); }
+    if (t.closest('#addJobBtn')) return openJobDlg(null);
+    const mc = t.closest('.machine'); if (mc) return openMachine(mc.dataset.id);
+    const chip = t.closest('.chip'); if (chip){ state.filter = chip.dataset.f; return render(); }
+    const jb = t.closest('.job'); if (jb){ const m = curMachine(); return openDoneDlg(m, m.jobs.find(x => x.id === jb.dataset.jid)); }
+    const je = t.closest('.jentry'); if (je) return openEntryDlg(je.dataset.eid, null, je.dataset.mid || null);
+    const en = t.closest('.entry'); if (en) return openEntryDlg(en.dataset.eid);
+  });
+
+  function addDays(s, n){ const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0,10); }
+  const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 864e5);
+  // Turnusdag (1..på) for en dato, eller null hvis fri / ingen turnus
+  function turnusDay(date){
+    const t = db.turnus; if (!t || !t.start || !t.on) return null;
+    const cyc = t.on + (t.off || 0);
+    const idx = ((daysBetween(t.start, date) % cyc) + cyc) % cyc;
+    return idx < t.on ? idx + 1 : null;
+  }
+  function nextOnDay(from){
+    if (!db.turnus) return from;
+    for (let i = 0; i < 400; i++){ const d = addDays(from, i); if (turnusDay(d)) return d; }
+    return from;
+  }
+  function nextDayDate(){
+    const last = db.general.filter(e => e.type === 'maskinrunde').map(e => e.date).sort().pop();
+    let date;
+    if (last) date = addDays(last, 1);
+    else { const k = turnusDay(today()); date = k ? addDays(today(), 1 - k) : today(); }
+    return nextOnDay(date);
+  }
+  function newDay(){
+    const date = nextDayDate();
+    if (date > today()){
+      if (db.turnus && !turnusDay(today())) return toast(`Du har fri – neste tur starter ${dayLabel(date).toLowerCase()} ${fmtDate(date)}`);
+      return toast('Dagens maskinrunde er allerede ført');
+    }
+    const k = turnusDay(date);
+    const en = { id: uid(), created: Date.now(), date, time: '07:00', type: 'maskinrunde',
+      desc: 'Maskinrunde' + (k ? ` – dag ${k} av ${db.turnus.on}` : ''), by: '', cost: null, hours: null };
+    db.general.push(en); save(); render(); window.scrollTo(0,0);
+    toast(`🌅 ${dayLabel(date)}${k ? ` – dag ${k} av ${db.turnus.on}` : ''} · maskinrunde kl. 07:00`, 'Angre', () => {
+      db.general = db.general.filter(x => x !== en); save(); render(); toast('Angret');
+    });
+  }
+  function openMachine(id){
+    state = { tab: 'machines', machineId: id, filter: 'alle', q: '' };
+    try { history.pushState({m:id}, ''); } catch(e){}
+    render(); window.scrollTo(0,0);
+  }
+  function goHome(){ state.machineId = null; state.q = ''; state.filter = 'alle'; render(); window.scrollTo(0,0); }
+  function setTab(t){
+    if (state.machineId && history.state && history.state.m){ state.machineId = null; try { history.replaceState(null, ''); } catch(e){} }
+    state = { tab: t, machineId: null, filter: 'alle', q: '' }; render(); window.scrollTo(0,0);
+  }
+  $('tabJournal').onclick = () => setTab('journal');
+  $('bellBtn').onclick = () => {
+    const due = dueJobs();
+    $('dueList').innerHTML = due.length ? due.map(x => `<div class="duerow" data-goto="${x.m.id}" data-jid="${x.j.id}">
+        <div class="dn"><b>${esc(x.j.name)}</b><span class="sub">${esc(x.m.name)}</span></div>
+        <span class="pill ${x.s.cls}">${x.s.text}</span></div>`).join('')
+      : '<p class="sub" style="margin:12px 0">Ingen jobber forfaller snart. 👍</p>';
+    $('dueDlg').showModal();
+  };
+  $('dueList').addEventListener('click', e => {
+    const r = e.target.closest('[data-goto]'); if (!r) return;
+    const m = machineById(r.dataset.goto); $('dueDlg').close();
+    openDoneDlg(m, m && m.jobs.find(x => x.id === r.dataset.jid));
+  });
+  $('tabMachines').onclick = () => setTab('machines');
+  backBtn.onclick = () => { if (history.state && history.state.m) history.back(); else goHome(); };
+  window.addEventListener('popstate', () => { if (state.machineId) goHome(); });
+
+  // ---------- Dialoger ----------
+  document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => b.closest('dialog').close());
+  document.querySelectorAll('dialog').forEach(d => d.addEventListener('click', e => { if (e.target === d) d.close(); }));
+
+  // Maskin
+  const machineDlg = $('machineDlg'), machineForm = $('machineForm');
+  let editingMachine = null;
+  function openMachineDlg(m){
+    editingMachine = m || null;
+    machineForm.reset();
+    $('machineDlgTitle').textContent = m ? 'Rediger maskin' : 'Ny maskin';
+    $('machineDelBtn').hidden = !m;
+    if (m){
+      machineForm.name.value = m.name; machineForm.icon.value = m.icon || '⚙️';
+      machineForm.avgPerDay.value = m.avgPerDay ?? ''; machineForm.model.value = m.model || '';
+      machineForm.notes.value = m.notes || '';
+    }
+    machineDlg.showModal();
+  }
+  machineForm.addEventListener('submit', e => {
+    e.preventDefault();
+    const f = machineForm, data = {
+      name: f.name.value.trim(), icon: f.icon.value, avgPerDay: num(f.avgPerDay.value),
+      model: f.model.value.trim(), notes: f.notes.value.trim()
+    };
+    if (!data.name) return;
+    if (editingMachine) Object.assign(editingMachine, data);
+    else db.machines.push(fix({ id: uid(), entries: [], jobs: [], created: Date.now(), meter: null, ...data }));
+    save(); machineDlg.close(); render(); toast('Lagret');
+  });
+  $('machineDelBtn').onclick = async () => {
+    const m = editingMachine; if (!m) return;
+    if (!await ask(`Slette «${m.name}» med ${m.jobs.length} jobber og ${m.entries.length} loggføringer?`, 'Slett')) return;
+    db.machines = db.machines.filter(x => x !== m); save(); machineDlg.close();
+    goHome(); toast('Maskin slettet');
+  };
+  editMachineBtn.onclick = () => openMachineDlg(curMachine());
+
+  // Timeteller
+  const meterDlg = $('meterDlg'), meterForm = $('meterForm');
+  function openMeterDlg(){
+    const m = curMachine(); if (!m) return;
+    const mi = meterInfo(m);
+    meterForm.reset();
+    $('meterInfo').textContent = mi.hours != null ? `Sist registrert: ${fmtH(mi.hours)} t${mi.date ? ' (' + fmtDate(mi.date) + ')' : ''}` : '';
+    meterForm.hours.value = ''; meterForm.hours.placeholder = mi.hours != null ? fmtH(mi.hours) : 'Timer';
+    meterForm.date.value = today();
+    meterDlg.showModal(); meterForm.hours.focus();
+  }
+  meterForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const m = curMachine(); if (!m) return;
+    const h = num(meterForm.hours.value), date = meterForm.date.value; if (h == null || !date) return;
+    const prev = currentHours(m);
+    // Snitt per døgn oppdateres automatisk fra forrige avlesning
+    const mi = meterInfo(m);
+    if (mi.hours != null && mi.date && h > mi.hours){
+      const days = (new Date(date) - new Date(mi.date)) / 864e5;
+      if (days >= 3) m.avgPerDay = Math.round((h - mi.hours) / days * 10) / 10;
+    }
+    m.meter = { hours: h, date };
+    save(); meterDlg.close(); render(); toast('Timeteller oppdatert');
+  });
+
+  // Jobb
+  const jobDlg = $('jobDlg'), jobForm = $('jobForm');
+  let editingJob = null;
+  function openJobDlg(jid){
+    const m = curMachine(); if (!m) return;
+    const j = jid ? m.jobs.find(x => x.id === jid) : null;
+    editingJob = j;
+    jobForm.reset();
+    $('jobDlgTitle').textContent = j ? j.name : 'Ny jobb';
+    $('jobDelBtn').hidden = !j;
+    if (j){
+      jobForm.name.value = j.name; jobForm.kind.value = j.kind || 'service';
+      jobForm.interval.value = j.interval; jobForm.lastHours.value = j.lastHours ?? '';
+      jobForm.desc.value = j.desc || '';
+    } else {
+      const cur = currentHours(m); if (cur != null) jobForm.lastHours.value = cur;
+    }
+    jobDlg.showModal();
+  }
+  jobForm.addEventListener('submit', e => {
+    e.preventDefault();
+    const m = curMachine(); if (!m) return;
+    const f = jobForm, data = {
+      name: f.name.value.trim(), kind: f.kind.value, interval: num(f.interval.value),
+      lastHours: num(f.lastHours.value) ?? 0, desc: f.desc.value.trim()
+    };
+    if (!data.name || !data.interval) return;
+    if (editingJob) Object.assign(editingJob, data); else m.jobs.push({ id: uid(), ...data });
+    save(); jobDlg.close(); render(); toast('Jobb lagret');
+  });
+  $('jobDelBtn').onclick = async () => {
+    const m = curMachine(); if (!m || !editingJob) return;
+    if (!await ask(`Slette jobben «${editingJob.name}»? Loggføringene beholdes.`, 'Slett')) return;
+    m.jobs = m.jobs.filter(x => x !== editingJob); save(); jobDlg.close(); render(); toast('Jobb slettet');
+  };
+
+  // Turnus
+  const turnusDlg = $('turnusDlg'), turnusForm = $('turnusForm');
+  let calMonth = null; // 'YYYY-MM'
+  const MONTHS_FULL = ['januar','februar','mars','april','mai','juni','juli','august','september','oktober','november','desember'];
+  function withFormTurnus(fn){
+    const st = turnusForm.start.value, on = num(turnusForm.on.value), off = num(turnusForm.off.value) ?? 0;
+    const keep = db.turnus; db.turnus = (st && on) ? { start: st, on, off } : null;
+    try { return fn(db.turnus); } finally { db.turnus = keep; }
+  }
+  function turnusPreview(){
+    withFormTurnus(t => {
+      if (!t){ $('turnusPreview').textContent = ''; $('turnusCal').innerHTML = ''; return; }
+      const k = turnusDay(today());
+      $('turnusPreview').textContent = k ? `I dag er dag ${k} av ${t.on} på tur.` : `Du har fri i dag. Neste tur starter ${fmtDate(nextOnDay(today()))}.`;
+      if (!calMonth) calMonth = today().slice(0,7);
+      const [y, m] = calMonth.split('-').map(Number);
+      const first = `${calMonth}-01`, dim = new Date(y, m, 0).getDate();
+      const lead = (new Date(first + 'T12:00:00').getDay() + 6) % 7; // mandag først
+      const runder = new Set(db.general.filter(e => e.type === 'maskinrunde').map(e => e.date));
+      let cells = ['ma','ti','on','to','fr','lø','sø'].map(d => `<div class="wd">${d}</div>`).join('');
+      cells += '<div></div>'.repeat(lead);
+      for (let d = 1; d <= dim; d++){
+        const ds = `${calMonth}-${String(d).padStart(2,'0')}`, td = turnusDay(ds);
+        const cls = td ? (td === 1 ? 'c on start' : 'c on') : 'c off';
+        cells += `<div class="${cls}${ds === today() ? ' today' : ''}">${d}<small>${td ? (td === 1 ? 'start' : td === t.on ? 'siste' : td) + (runder.has(ds) ? ' ✓' : '') : ''}</small></div>`;
+      }
+      // Neste turer
+      const tours = []; let from = today();
+      const kk = turnusDay(from); if (kk) from = addDays(from, 1 - kk);
+      for (let n = 0; n < 4; n++){
+        const s0 = nextOnDay(from), e0 = addDays(s0, t.on - 1);
+        tours.push([s0, e0]); from = addDays(e0, 1);
+      }
+      $('turnusCal').innerHTML = `
+        <div class="calnav"><button type="button" data-cal="-1" aria-label="Forrige måned">‹</button>
+          <b>${MONTHS_FULL[m-1]} ${y}</b><button type="button" data-cal="1" aria-label="Neste måned">›</button></div>
+        <div class="calgrid">${cells}</div>
+        <div class="legend"><span><i style="background:var(--brand)"></i>Første dag</span><span><i style="background:#dbe8f1"></i>På tur</span><span><i style="outline:2px solid var(--accent);outline-offset:-2px"></i>I dag</span><span>✓ maskinrunde ført</span></div>
+        <ul class="tours">${tours.map(([a,b]) => `<li><span>${a <= today() && today() <= b ? 'Nåværende tur' : 'Tur'}</span><span>${fmtDate(a)} – ${fmtDate(b)}</span></li>`).join('')}</ul>`;
+    });
+  }
+  $('turnusCal').addEventListener('click', e => {
+    const b = e.target.closest('[data-cal]'); if (!b) return;
+    const [y, m] = calMonth.split('-').map(Number), d = new Date(y, m - 1 + (+b.dataset.cal), 1);
+    calMonth = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; turnusPreview();
+  });
+  ['input','change'].forEach(ev => turnusForm.addEventListener(ev, turnusPreview));
+  $('turnusBtn').onclick = () => {
+    menuDlg.close(); turnusForm.reset();
+    const t = db.turnus;
+    turnusForm.start.value = t ? t.start : today(); turnusForm.on.value = t ? t.on : 14; turnusForm.off.value = t ? t.off : 14;
+    $('turnusDelBtn').hidden = !t; calMonth = today().slice(0,7); turnusPreview(); turnusDlg.showModal();
+  };
+  turnusForm.addEventListener('submit', e => {
+    e.preventDefault();
+    const on = num(turnusForm.on.value), off = num(turnusForm.off.value) ?? 0;
+    if (!turnusForm.start.value || !on) return;
+    db.turnus = { start: turnusForm.start.value, on, off }; save(); turnusDlg.close(); render(); toast('Turnus lagret');
+  });
+  $('turnusDelBtn').onclick = () => { db.turnus = null; save(); turnusDlg.close(); render(); toast('Turnus fjernet'); };
+
+  // Utfør jobb – så enkelt som mulig
+  const doneDlg = $('doneDlg'), doneForm = $('doneForm');
+  let doneCtx = null;
+  function openDoneDlg(m, j){
+    if (!m || !j) return;
+    doneCtx = {m, j};
+    const s = jobState(m, j);
+    doneForm.reset();
+    $('doneTitle').textContent = j.name;
+    $('doneSub').innerHTML = `${esc(m.name)} · <span class="pill ${s.cls}">${s.text}</span> · hver ${fmtH(j.interval)} t, sist ved ${fmtH(j.lastHours || 0)} t`;
+    $('doneDesc').innerHTML = j.desc ? `<div class="jobdesc"><b>Dette skal gjøres:</b>\n${esc(j.desc)}</div>` : '';
+    const cur = currentHours(m); doneForm.hours.value = cur ?? '';
+    renderNoteChips();
+    const lastBy = allEntries().find(x => x.e.by); if (lastBy) doneForm.by.value = lastBy.e.by;
+    doneDlg.showModal();
+  }
+  function renderNoteChips(){
+    const j = doneCtx && doneCtx.j; const box = $('noteChips');
+    const notes = (j && j.notes) || [];
+    const curText = doneForm.note.value.trim();
+    box.innerHTML = notes.map((n,i) => `<button type="button" class="nchip ${n === curText ? 'on' : ''}" data-n="${i}"><span>${esc(n)}</span><i data-del="${i}" title="Fjern">✕</i></button>`).join('');
+    box.hidden = !notes.length;
+    doneForm.note.placeholder = notes.length ? 'Trykk på en knapp over, eller skriv nytt' : 'F.eks. byttet impeller og pakning, olje 15W-40';
+  }
+  $('noteChips').addEventListener('click', async e => {
+    const j = doneCtx && doneCtx.j; if (!j) return;
+    const del = e.target.closest('[data-del]');
+    if (del){
+      e.stopPropagation();
+      const n = j.notes[+del.dataset.del];
+      if (!await ask(`Fjerne knappen «${n.length > 60 ? n.slice(0,60) + '…' : n}»?`, 'Fjern')) return;
+      j.notes.splice(+del.dataset.del, 1); save(); return renderNoteChips();
+    }
+    const c = e.target.closest('[data-n]'); if (!c) return;
+    const n = j.notes[+c.dataset.n];
+    doneForm.note.value = doneForm.note.value.trim() === n ? '' : n;
+    renderNoteChips();
+  });
+  doneForm.note.addEventListener('input', () => renderNoteChips());
+  doneForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const {m, j} = doneCtx || {}; if (!m) return;
+    const h = num(doneForm.hours.value);
+    const cur = currentHours(m);
+    const note = doneForm.note.value.trim();
+    m.entries.push({ id: uid(), created: Date.now(), jobId: j.id, date: today(), time: nowTime(), hours: h, hoursMissing: h == null,
+      type: j.kind || 'service', desc: '✓ ' + j.name + (note ? '\n' + note : ''), by: doneForm.by.value.trim(), cost: null });
+    j.lastHours = h ?? cur ?? j.lastHours;
+    if (note){ j.notes = [note, ...(j.notes || []).filter(x => x !== note)].slice(0, 8); }
+    save(); doneDlg.close(); render(); toast(`✓ ${j.name} utført – neste ved ${fmtH(j.lastHours + j.interval)} t`);
+  });
+  $('doneEditBtn').onclick = () => {
+    const {m, j} = doneCtx || {}; if (!m) return;
+    doneDlg.close();
+    if (state.machineId !== m.id) openMachine(m.id);
+    openJobDlg(j.id);
+  };
+
+  // Logg
+  const entryDlg = $('entryDlg'), entryForm = $('entryForm');
+  entryForm.type.innerHTML = TYPES.map(t => `<option value="${t[0]}">${t[1]}</option>`).join('');
+  let editingEntry = null, entryJob = null, entryFrom = null;
+  function fillMachineSelect(sel){
+    entryForm.machine.innerHTML = `<option value="">Generelt (ingen maskin)</option>` +
+      db.machines.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
+    entryForm.machine.value = sel || '';
+  }
+  function updateHoursField(){
+    const mm = machineById(entryForm.machine.value);
+    entryForm.hours.disabled = !mm;
+    const c = mm ? currentHours(mm) : null;
+    entryForm.hours.placeholder = !mm ? '–' : c != null ? `Sist: ${fmtH(c)}` : 'Timer';
+  }
+  entryForm.machine.addEventListener('change', updateHoursField);
+  const lastMachine = () => { try { const id = localStorage.getItem('md.lastMachine'); return machineById(id) ? id : null; } catch(e){ return null; } };
+  function openEntryDlg(eid, job, mid, preset){
+    // mid: maskin-id fra dagboka ('' / null = generelt). Uten mid brukes åpen maskin.
+    const fromJournal = mid !== undefined;
+    const m = fromJournal ? machineById(mid) : curMachine();
+    const list = m ? m.entries : db.general;
+    const en = eid ? list.find(x => x.id === eid) : null;
+    editingEntry = en; entryJob = job || null; entryFrom = m;
+    entryForm.reset();
+    fillMachineSelect(m ? m.id : '');
+    entryForm.machine.disabled = !!job;
+    $('entryDlgTitle').textContent = (en && preset) ? `${preset.icon} ${preset.label}` : en ? 'Rediger innføring' : job ? 'Registrer utført' : preset ? `${preset.icon} ${preset.label}` : 'Ny innføring';
+    entryForm.desc.placeholder = preset ? preset.ph : 'F.eks. Skiftet motorolje og oljefilter';
+    $('entryDelBtn').hidden = !en;
+    $('entryJobHint').hidden = !job;
+    if (job) $('entryJobHint').textContent = `Jobben «${job.name}» blir satt som utført ved timetallet du skriver inn.`;
+    const cur = m ? currentHours(m) : null;
+    if (en){
+      entryForm.date.value = en.date; entryForm.time.value = en.time || ''; entryForm.hours.value = en.hours ?? '';
+      entryForm.type.value = en.type; entryForm.desc.value = en.desc;
+      entryForm.by.value = en.by || ''; entryForm.cost.value = en.cost ?? '';
+    } else {
+      entryForm.date.value = today(); entryForm.time.value = nowTime();
+      if (job){ entryForm.hours.value = cur ?? ''; entryForm.type.value = job.kind || 'service'; entryForm.desc.value = job.name; }
+      else entryForm.type.value = (state.tab !== 'journal' && state.filter !== 'alle') ? state.filter : (m ? 'service' : 'annet');
+      const lastBy = allEntries().find(x => x.e.by); if (lastBy) entryForm.by.value = lastBy.e.by;
+    }
+    if (preset && !en) entryForm.type.value = preset.type;
+    updateHoursField();
+    entryDlg.showModal();
+    if (preset) setTimeout(() => entryForm.desc.focus(), 50);
+  }
+  entryForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    const m = machineById(entryForm.machine.value);
+    const f = entryForm, data = {
+      date: f.date.value, time: f.time.value, hours: m ? num(f.hours.value) : null, type: f.type.value,
+      desc: f.desc.value.trim(), by: f.by.value.trim(), cost: num(f.cost.value)
+    };
+    if (!data.date) data.date = today();
+    const cur = m ? currentHours(m) : null;
+    try { localStorage.setItem('md.lastMachine', m ? m.id : ''); } catch(e){}
+    const target = m ? m.entries : db.general;
+    if (editingEntry){
+      Object.assign(editingEntry, data);
+      if (entryFrom !== m){
+        const from = entryFrom ? entryFrom.entries : db.general;
+        from.splice(from.indexOf(editingEntry), 1); target.push(editingEntry);
+      }
+    } else target.push({ id: uid(), created: Date.now(), jobId: entryJob ? entryJob.id : undefined, ...data });
+    if (entryJob) entryJob.lastHours = data.hours ?? cur ?? entryJob.lastHours;
+    if (editingEntry && data.hours != null) delete editingEntry.hoursMissing;
+    save(); entryDlg.close(); render(); toast(entryJob ? `«${entryJob.name}» registrert som utført` : 'Lagret');
+    entryJob = null;
+  });
+  $('entryDelBtn').onclick = async () => {
+    if (!editingEntry || !await ask('Slette denne innføringen?', 'Slett')) return;
+    const from = entryFrom ? entryFrom.entries : db.general;
+    from.splice(from.indexOf(editingEntry), 1); save(); entryDlg.close(); render(); toast('Slettet');
+  };
+
+  $('fab').onclick = () => state.tab === 'journal' ? openEntryDlg(null, null, null) : state.machineId ? openEntryDlg(null) : openMachineDlg(null);
+
+  // ---------- Meny ----------
+  const menuDlg = $('menuDlg');
+  $('menuBtn').onclick = () => menuDlg.showModal();
+  function download(name, text, mime){
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], {type: mime}));
+    a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  $('exportBtn').onclick = () => {
+    download(`maskindagbok-${today()}.json`, JSON.stringify(db, null, 2), 'application/json');
+    menuDlg.close(); toast('Sikkerhetskopi lastet ned');
+  };
+  $('csvBtn').onclick = () => {
+    const q = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
+    const rows = [['Dato','Klokkeslett','Maskin','Timeteller','Type','Beskrivelse','Utført av','Kostnad (kr)']];
+    allEntries().forEach(({e,m}) =>
+      rows.push([e.date, e.time || '', m ? m.name : 'Generelt', e.hours ?? '', typeLabel(e.type).replace(/^\S+\s/,''), e.desc, e.by, e.cost ?? '']));
+    download(`maskindagbok-${today()}.csv`, '﻿' + rows.map(r => r.map(q).join(';')).join('\r\n'), 'text/csv');
+    menuDlg.close(); toast('CSV lastet ned');
+  };
+  $('seedBtn').onclick = async () => {
+    const missing = SEED.filter(s => !db.machines.some(m => m.id === s.id));
+    if (!missing.length){ menuDlg.close(); return toast('Maskinene ligger allerede inne'); }
+    if (!await ask(`Legge inn ${missing.map(s => s.name).join(', ')} med jobber og kjøretimer fra CCOM (2.11.2026)?`, 'Legg inn')) return;
+    db.machines.push(...clone(missing).map(fix)); save(); menuDlg.close(); setTab('machines'); toast('Maskiner lagt inn');
+  };
+  const importFile = $('importFile');
+  $('importBtn').onclick = () => importFile.click();
+  importFile.onchange = async () => {
+    const file = importFile.files[0]; importFile.value = ''; if (!file) return;
+    try {
+      const d = JSON.parse(await file.text());
+      if (!d || !Array.isArray(d.machines)) throw 0;
+      const n = d.machines.reduce((s,m) => s + (m.entries?.length || 0), 0) + (d.general?.length || 0);
+      if (!await ask(`Gjenopprette ${d.machines.length} maskiner og ${n} loggføringer? Det som ligger i appen nå blir erstattet.`, 'Gjenopprett')) return;
+      d.machines.forEach(fix); d.general = Array.isArray(d.general) ? d.general : [];
+      db = d; save(); menuDlg.close(); goHome(); toast('Gjenopprettet');
+    } catch(e){ toast('Fant ikke gyldig sikkerhetskopi i filen'); }
+  };
+
+  // ---------- Bekreft-dialog ----------
+  function ask(text, yes='OK'){
+    return new Promise(res => {
+      const d = $('askDlg');
+      $('askText').textContent = text;
+      const y = $('askYes'), n = $('askNo');
+      y.textContent = yes;
+      const done = v => { y.onclick = n.onclick = d.onclose = null; d.close(); res(v); };
+      y.onclick = () => done(true); n.onclick = () => done(false); d.onclose = () => res(false);
+      d.showModal();
+    });
+  }
+
+  // ---------- Diverse ----------
+  let tt; function toast(msg, action, fn){
+    const t = $('toast'); t.innerHTML = esc(msg) + (action ? ` <u>${esc(action)}</u>` : '');
+    t.classList.toggle('act', !!action); t.onclick = action ? () => { t.classList.remove('show','act'); fn(); } : null;
+    t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show','act'), action ? 5000 : 2000);
+  }
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{}); } catch(e){}
+  window.addEventListener('storage', e => { if (e.key === KEY){ db = load(); render(); } });
+
+  render();
+
+  // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
+  const APP_VERSION = '2';
+  try {
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
+      const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded){ reloaded = true; location.reload(); } });
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}).then(r => {
+          document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') r.update().catch(()=>{}); });
+        }).catch(()=>{});
+      });
+    }
+  } catch(e){}
+  const vEl = document.getElementById('ver'); if (vEl) vEl.textContent = 'Versjon ' + APP_VERSION;
+})();
+</script>
+</body>
+</html>
