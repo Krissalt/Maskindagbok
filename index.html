@@ -498,7 +498,16 @@
   function bunkerEst(date){
     const r = db.general.filter(e => e.type === 'maskinrunde' && e.bunker != null)
       .map(e => ({ d: e.date, l: e.bunker })).sort((a,b) => a.d.localeCompare(b.d));
-    const before = r.filter(x => x.d <= date); if (!before.length) return null;
+    const before = r.filter(x => x.d <= date);
+    if (!before.length){
+      // Før første føring: regn bakover – legg til forbruket fram til første føring, trekk fra det som er bunkret imellom
+      const first = r[0]; if (!first) return null;
+      let spent = null;
+      if (anyFuelRate()) spent = engineFuelUse(date, first.d);
+      else if (r[1]){ const dd = daysBetween(first.d, r[1].d), u = first.l + receivedBetween(first.d, r[1].d) - r[1].l; if (dd > 0 && u > 0) spent = u / dd * daysBetween(date, first.d); }
+      if (spent == null) return null;
+      return { liters: Math.max(0, first.l + spent - receivedBetween(date, first.d)), estimated: true, last: first.l, lastDate: first.d, perDay: 0, byEngines: anyFuelRate(), back: true };
+    }
     const last = before[before.length-1], prev = before[before.length-2];
     // Mellom to føringer: fordel forbruket (motortimer × L/t, ellers jevnt per dag) slik at tallene treffer neste føring
     const next = r.find(x => x.d > date);
@@ -1465,7 +1474,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '14';
+  const APP_VERSION = '15';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
