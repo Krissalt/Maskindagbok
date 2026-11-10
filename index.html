@@ -75,8 +75,9 @@
   .quick button{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 10px;font:inherit;font-weight:600;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:10px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
   .quick button b{font-size:1.5rem;font-weight:400;line-height:1}
   .quick button:active{background:#e7eef3}
-  .quick .newday{grid-column:1 / -1;background:var(--brand);color:#fff;border-color:var(--brand);justify-content:center}
+  .quick .newday{background:var(--brand);color:#fff;border-color:var(--brand);justify-content:center}
   .quick .newday small{font-weight:400;opacity:.8}
+  .quick .newday{justify-content:flex-start;text-align:left}
   .notechips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
   .nchip{display:inline-flex;align-items:center;border:1px solid var(--line);background:#f6f8fa;border-radius:12px;font:inherit;font-size:.88rem;color:var(--ink);text-align:left;cursor:pointer;max-width:100%}
   .nchip span{padding:8px 4px 8px 12px;white-space:pre-wrap;word-break:break-word}
@@ -115,6 +116,17 @@
   .crow .cb b{display:block}
   .crow .cno{font-variant-numeric:tabular-nums;color:var(--brand);font-weight:700}
   .crow.done .cb{opacity:.45;text-decoration:line-through}
+  .thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .thumbs img{width:64px;height:64px;object-fit:cover;border-radius:8px;background:#e7eef3;cursor:pointer;border:1px solid var(--line)}
+  .pedit{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px}
+  .pedit .pw{position:relative}
+  .pedit img{width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+  .pedit .px{position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:0;background:var(--bad);color:#fff;font-size:.8rem;cursor:pointer}
+  .padd{width:72px;height:72px;border-radius:10px;border:2px dashed var(--line);background:#fff;font-size:1.5rem;cursor:pointer;color:var(--muted)}
+  #viewer{background:#000;width:100vw;max-width:100vw;height:100vh;max-height:100vh;border-radius:0;padding:0}
+  #viewer img{width:100%;height:100%;object-fit:contain;display:block}
+  #viewer button{position:fixed;top:calc(env(safe-area-inset-top) + 10px);right:12px;background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:50%;width:44px;height:44px;font-size:1.3rem;cursor:pointer}
+  .quick .photo{}
   .day{font-size:.8rem;font-weight:700;color:var(--muted);margin:16px 4px 6px}
   .jentry{display:flex;gap:12px;cursor:pointer}
   .jentry .time{font-weight:700;font-variant-numeric:tabular-nums;min-width:44px;color:var(--brand)}
@@ -298,6 +310,8 @@
   <select name="type" required></select>
   <div id="recvWrap" hidden><label id="recvLabel">⛽ Mottatt (liter)</label><input name="received" type="number" inputmode="numeric" min="0" step="1" placeholder="F.eks. 12000"></div>
   <div id="bunkerWrap" hidden><label>⛽ Bunkersbeholdning (liter)</label><input name="bunker" type="number" inputmode="numeric" min="0" step="1" placeholder="F.eks. 42300"><p class="hint" id="bunkerHint"></p></div>
+  <label>Bilder</label>
+  <div class="pedit" id="photoEdit"></div>
   <label>Hva ble gjort / observert</label>
   <textarea name="desc" placeholder="F.eks. Skiftet motorolje og oljefilter"></textarea>
   <div class="row">
@@ -391,6 +405,9 @@
   </div>
 </form></dialog>
 <div id="printArea"></div>
+<dialog id="viewer"><img id="viewerImg" alt=""><button type="button" data-close aria-label="Lukk">✕</button></dialog>
+<input type="file" id="photoQuick" accept="image/*" hidden>
+<input type="file" id="photoAdd" accept="image/*" multiple hidden>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 
 <script>
@@ -401,7 +418,7 @@
   const TYPES = [
     ['maskinrunde','🔄 Maskinrunde'],['service','🛠️ Service'],['vedlikehold','🔧 Vedlikehold'],['oljefyll','🫗 Fylt olje'],['hendelse','⚠️ Hendelse'],['olje','🛢️ Oljeskift'],['reparasjon','🔧 Reparasjon'],
     ['feil','⚠️ Feil / avvik'],['inspeksjon','🔍 Kontroll'],['drivstoff','⛽ Bunkring'],['overforing','🚢 Overført'],
-    ['deler','📦 Deler byttet'],['drift','⏱️ Drift / bruk'],['timer','⏱️ Timeteller'],['annet','📝 Annet']
+    ['deler','📦 Deler byttet'],['drift','⏱️ Drift / bruk'],['timer','⏱️ Timeteller'],['bilde','📷 Bilde'],['annet','📝 Annet']
   ];
   const QUICK = [
     {type:'oljefyll', label:'Fylt olje', icon:'🫗', ph:'Hvor mye og hvilken olje? F.eks. 2 L 15W-40'},
@@ -629,7 +646,8 @@
   const machineById = id => db.machines.find(x => x.id === id) || null;
   const curMachine = () => db.machines.find(x => x.id === state.machineId);
 
-  function render(){
+  function render(){ renderInner(); hydratePhotos(); }
+  function renderInner(){
     $('tabJournal').classList.toggle('on', state.tab === 'journal');
     $('tabJobs').classList.toggle('on', state.tab === 'jobs');
     $('fab').hidden = state.tab === 'jobs';
@@ -651,8 +669,9 @@
     if (q) list = list.filter(({e,m}) => [e.desc, e.by, typeLabel(e.type), m ? m.name : 'generelt'].join(' ').toLowerCase().includes(q));
     let html = '';
     if (!q) html = `<div class="quick">${QUICK.map((x,i) => `<button data-quick="${i}"><b>${x.icon}</b>${x.label}</button>`).join('')}
-      <button class="newday" id="newDayBtn"><b>🌅</b>Neste dag <small>· ${(() => { const d = nextDayDate(), k = turnusDay(d);
-        return d > today() ? (db.turnus && !turnusDay(today()) ? 'fri – tur starter ' + fmtDate(d) : 'i dag er ført') : (k ? `dag ${k} av ${db.turnus.on}, ` : '') + 'maskinrunde kl. 07:00'; })()}</small></button></div>` + html;
+      <button id="photoBtn"><b>📷</b>Bilde</button>
+      <button class="newday" id="newDayBtn"><b>🌅</b><span>Neste dag<small style="display:block;font-size:.7rem">${(() => { const d = nextDayDate(), k = turnusDay(d);
+        return d > today() ? (db.turnus && !turnusDay(today()) ? 'fri – tur starter ' + fmtDate(d) : 'i dag er ført') : (k ? `dag ${k} av ${db.turnus.on}, ` : '') + 'kl. 07:00'; })()}</small></span></button></div>` + html;
     html += `<input class="search" id="search" type="search" placeholder="Søk i dagboka …" value="${esc(state.q)}">`;
     if (!list.length){
       html += `<div class="empty"><div class="big">📒</div><p>${q ? 'Ingen treff.' : '<b>Dagboka er tom</b></p><p>Trykk på <b>+</b> for å skrive den første innføringen.'}</p></div>`;
@@ -670,6 +689,7 @@
             ${estLine(e)}
             ${e.type === 'maskinrunde' ? bunkerLine(e) : ''}
             ${['drivstoff','overforing'].includes(e.type) ? (e.received ? `<div class="sub" style="margin-top:2px">${e.type === 'overforing' ? '🚢 Overført' : '⛽ Mottatt'} ${fmtL(e.received)} L</div>` : '<div class="missing sub" style="margin-top:2px">Liter ikke fylt inn</div>') : ''}
+            ${thumbs(e)}
             ${(e.hours != null || e.by || e.cost) ? `<div class="meta sub" style="margin-top:4px;display:flex;gap:12px;flex-wrap:wrap">
               ${e.hours != null ? `<span>⏱️ ${fmtH(e.hours)} t</span>` : ''}${e.by ? `<span>👤 ${esc(e.by)}</span>` : ''}${e.cost ? `<span>💰 ${Math.round(e.cost).toLocaleString('no-NO')} kr</span>` : ''}</div>` : ''}
           </div></div>`;
@@ -707,6 +727,74 @@
         : `<div class="empty"><div class="big">✅</div><p>${f === 'snart' ? 'Ingen jobber forfaller snart.' : 'Ingen jobber.'}</p></div>`}`;
     bindSearch();
   }
+  // ---------- Bilder (IndexedDB på telefonen) ----------
+  let idbP = null;
+  function idb(){
+    if (!idbP) idbP = new Promise((res, rej) => {
+      const r = indexedDB.open('maskindagbok-bilder', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('p');
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+    return idbP;
+  }
+  async function pOp(mode, fn){ const d = await idb(); return new Promise((res, rej) => { const tx = d.transaction('p', mode); const st = tx.objectStore('p'); const rq = fn(st); tx.oncomplete = () => res(rq && rq.result); tx.onerror = () => rej(tx.error); }); }
+  const photoPut = (id, blob) => pOp('readwrite', st => st.put(blob, id));
+  const photoGet = id => pOp('readonly', st => st.get(id));
+  const photoDel = id => pOp('readwrite', st => st.delete(id));
+  const urlCache = new Map();
+  async function photoUrl(id){
+    if (urlCache.has(id)) return urlCache.get(id);
+    const b = await photoGet(id).catch(() => null); if (!b) return null;
+    const u = URL.createObjectURL(b); urlCache.set(id, u); return u;
+  }
+  // Krymp til maks 1600 px og JPEG, så lagringen ikke fylles opp
+  async function compress(file){
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
+    const max = 1600, k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(img.src);
+    return await new Promise(res => c.toBlob(res, 'image/jpeg', 0.75));
+  }
+  async function addPhotos(files){
+    const ids = [];
+    for (const f of files){ try { const b = await compress(f); const id = 'p' + uid(); await photoPut(id, b); ids.push(id); } catch(e){ toast('Kunne ikke lagre bildet'); } }
+    return ids;
+  }
+  const thumbs = e => (e.photos && e.photos.length) ? `<div class="thumbs">${e.photos.map(id => `<img data-photo="${id}" alt="Bilde">`).join('')}</div>` : '';
+  async function hydratePhotos(root = document){
+    for (const img of root.querySelectorAll('img[data-photo]:not([src])')){ const u = await photoUrl(img.dataset.photo); if (u) img.src = u; else img.alt = 'Bilde mangler'; }
+  }
+  async function openViewer(id){ const u = await photoUrl(id); if (!u) return toast('Fant ikke bildet'); $('viewerImg').src = u; $('viewer').showModal(); }
+  // Hurtigknapp: ta/velg bilde → lagres med én gang
+  $('photoQuick').onchange = async () => {
+    const files = [...$('photoQuick').files]; $('photoQuick').value = ''; if (!files.length) return;
+    const ids = await addPhotos(files); if (!ids.length) return;
+    const mid = lastMachine(), m = machineById(mid);
+    const en = { id: uid(), created: Date.now(), date: today(), time: nowTime(), type: 'bilde', desc: '', by: '', cost: null, hours: null, photos: ids };
+    (m ? m.entries : db.general).push(en); save(); render();
+    toast(`📷 Bilde lagret kl. ${en.time}`, 'Fyll inn', () => openEntryDlg(en.id, null, mid || null));
+  };
+  // I føringsvinduet
+  let editPhotos = [], newPhotos = [];
+  function renderPhotoEdit(){
+    $('photoEdit').innerHTML = editPhotos.map(id => `<div class="pw"><img data-photo="${id}" alt=""><button type="button" class="px" data-px="${id}" aria-label="Fjern">✕</button></div>`).join('')
+      + `<button type="button" class="padd" id="padd" aria-label="Legg til bilde">📷</button>`;
+    hydratePhotos($('photoEdit'));
+  }
+  $('photoEdit').addEventListener('click', e => {
+    const x = e.target.closest('[data-px]'); if (x){
+      const id = x.dataset.px; editPhotos = editPhotos.filter(p => p !== id);
+      if (newPhotos.includes(id)){ newPhotos = newPhotos.filter(p => p !== id); photoDel(id).catch(()=>{}); }
+      return renderPhotoEdit();
+    }
+    if (e.target.closest('#padd')) return $('photoAdd').click();
+    const im = e.target.closest('img[data-photo]'); if (im) openViewer(im.dataset.photo);
+  });
+  $('photoAdd').onchange = async () => {
+    const files = [...$('photoAdd').files]; $('photoAdd').value = ''; if (!files.length) return;
+    const ids = await addPhotos(files); newPhotos.push(...ids); editPhotos.push(...ids); renderPhotoEdit();
+  };
+
   // ---------- Til CCOM ----------
   function ccomItems(){
     return db.machines.flatMap(m => m.entries.filter(e => e.jobId).map(e => ({ m, e, j: m.jobs.find(j => j.id === e.jobId) })))
@@ -861,7 +949,7 @@
             ${e.hours != null ? `<span>⏱️ ${fmtH(e.hours)} t</span>` : ''}
             ${e.by ? `<span>👤 ${esc(e.by)}</span>` : ''}
             ${e.cost ? `<span>💰 ${Math.round(e.cost).toLocaleString('no-NO')} kr</span>` : ''}
-          </div></div>`).join('')
+          </div>${thumbs(e)}</div>`).join('')
         : `<div class="empty" style="padding:20px"><p>${m.entries.length ? 'Ingen treff.' : 'Ingen loggføringer ennå. Trykk <b>+</b> for å skrive, eller trykk på en jobb og så <b>✓ Utført</b>.'}</p></div>`}
       </div>`;
 
@@ -870,6 +958,8 @@
 
   view.addEventListener('click', e => {
     const t = e.target;
+    const ph = t.closest('img[data-photo]'); if (ph){ e.stopPropagation(); return openViewer(ph.dataset.photo); }
+    if (t.closest('#photoBtn')) return $('photoQuick').click();
     if (t.closest('#meterBtn')) return openMeterDlg();
     if (t.closest('#newDayBtn')) return newDay();
     if (t.closest('#ccomBar')) return openCcom();
@@ -1213,6 +1303,7 @@
     entryForm.hours.placeholder = !mm ? '–' : c != null ? `Sist: ${fmtH(c)}` : 'Timer';
   }
   entryForm.machine.addEventListener('change', updateHoursField);
+  entryDlg.addEventListener('close', () => { if (newPhotos.length){ newPhotos.forEach(id => photoDel(id).catch(()=>{})); newPhotos = []; } });
   function updateBunkerField(){
     const on = entryForm.type.value === 'maskinrunde';
     $('bunkerWrap').hidden = !on;
@@ -1253,6 +1344,7 @@
     if (preset && !en) entryForm.type.value = preset.type;
     updateBunkerField();
     updateHoursField();
+    editPhotos = en && en.photos ? [...en.photos] : []; newPhotos = []; renderPhotoEdit();
     entryDlg.showModal();
     if (preset) setTimeout(() => entryForm.desc.focus(), 50);
   }
@@ -1263,9 +1355,13 @@
       date: f.date.value, time: f.time.value, hours: m ? num(f.hours.value) : null, type: f.type.value,
       desc: f.desc.value.trim(), by: f.by.value.trim(), cost: num(f.cost.value),
       bunker: f.type.value === 'maskinrunde' ? num(f.bunker.value) : undefined,
-      received: ['drivstoff','overforing'].includes(f.type.value) ? num(f.received.value) : undefined
+      received: ['drivstoff','overforing'].includes(f.type.value) ? num(f.received.value) : undefined,
+      photos: editPhotos.length ? [...editPhotos] : undefined
     };
     if (!data.date) data.date = today();
+    const removed = (editingEntry && editingEntry.photos || []).filter(id => !editPhotos.includes(id));
+    removed.forEach(id => photoDel(id).catch(()=>{}));
+    newPhotos = [];
     const cur = m ? currentHours(m) : null;
     try { localStorage.setItem('md.lastMachine', m ? m.id : ''); } catch(e){}
     const target = m ? m.entries : db.general;
@@ -1284,6 +1380,7 @@
   $('entryDelBtn').onclick = async () => {
     if (!editingEntry || !await ask('Slette denne innføringen?', 'Slett')) return;
     const from = entryFrom ? entryFrom.entries : db.general;
+    (editingEntry.photos || []).forEach(id => photoDel(id).catch(()=>{}));
     from.splice(from.indexOf(editingEntry), 1); save(); entryDlg.close(); render(); toast('Slettet');
   };
 
@@ -1298,9 +1395,12 @@
     a.download = name; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   }
-  $('exportBtn').onclick = () => {
-    download(`maskindagbok-${today()}.json`, JSON.stringify(db, null, 2), 'application/json');
-    menuDlg.close(); toast('Sikkerhetskopi lastet ned');
+  $('exportBtn').onclick = async () => {
+    // Bildene tas med i sikkerhetskopien, så ingenting går tapt
+    const ids = allEntries().flatMap(x => x.e.photos || []), photos = {};
+    for (const id of ids){ const b = await photoGet(id).catch(() => null); if (b) photos[id] = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); }); }
+    download(`maskindagbok-${today()}.json`, JSON.stringify({ ...db, photos }), 'application/json');
+    menuDlg.close(); toast(`Sikkerhetskopi lastet ned${ids.length ? ` (${ids.length} bilder)` : ''}`);
   };
   $('csvBtn').onclick = () => {
     const q = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
@@ -1326,6 +1426,8 @@
       const n = d.machines.reduce((s,m) => s + (m.entries?.length || 0), 0) + (d.general?.length || 0);
       if (!await ask(`Gjenopprette ${d.machines.length} maskiner og ${n} loggføringer? Det som ligger i appen nå blir erstattet.`, 'Gjenopprett')) return;
       d.machines.forEach(fix); d.general = Array.isArray(d.general) ? d.general : [];
+      const photos = d.photos || {}; delete d.photos;
+      for (const [id, url] of Object.entries(photos)){ try { await photoPut(id, await (await fetch(url)).blob()); } catch(e){} }
       db = d; save(); menuDlg.close(); goHome(); toast('Gjenopprettet');
     } catch(e){ toast('Fant ikke gyldig sikkerhetskopi i filen'); }
   };
@@ -1547,7 +1649,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '16';
+  const APP_VERSION = '17';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
