@@ -127,6 +127,14 @@
   #viewer img{width:100%;height:100%;object-fit:contain;display:block}
   #viewer button{position:fixed;top:calc(env(safe-area-inset-top) + 10px);right:12px;background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:50%;width:44px;height:44px;font-size:1.3rem;cursor:pointer}
   .quick .photo{}
+  .pwarn{background:#fff7e0;border:1px solid #f2d27a;border-radius:12px;padding:10px 12px;font-size:.85rem;margin-bottom:10px}
+  .part{display:flex;gap:10px;align-items:center;cursor:pointer}
+  .part .pb{flex:1;min-width:0}
+  .part .pno{font-variant-numeric:tabular-nums;font-weight:700;color:var(--brand);font-size:1.05rem;white-space:nowrap}
+  .conf{display:inline-block;font-size:.7rem;font-weight:700;border-radius:99px;padding:1px 7px;margin-left:4px;vertical-align:1px}
+  .conf.c3{background:#e3f3ea;color:var(--ok)} .conf.c2{background:#e7eef3;color:var(--brand)} .conf.c1{background:#fcefe2;color:var(--warn)} .conf.c0{background:#eee;color:#555}
+  .pnote{font-size:.8rem;color:var(--ok);margin-top:2px}
+  .bigno{font-size:1.8rem;font-weight:800;letter-spacing:.04em;color:var(--brand);font-variant-numeric:tabular-nums}
   .day{font-size:.8rem;font-weight:700;color:var(--muted);margin:16px 4px 6px}
   .jentry{display:flex;gap:12px;cursor:pointer}
   .jentry .time{font-weight:700;font-variant-numeric:tabular-nums;min-width:44px;color:var(--brand)}
@@ -213,6 +221,7 @@
   <button id="tabJournal" class="on"><b>📒</b>Dagbok</button>
   <button id="tabJobs"><b>✅</b>Jobber</button>
   <button id="tabMachines"><b>⚙️</b>Maskiner</button>
+  <button id="tabParts"><b>🔩</b>Deler</button>
 </nav>
 <div class="toast" id="toast"></div>
 
@@ -361,6 +370,27 @@
     <button type="button" class="btn pri" data-close>Ferdig</button>
   </div>
 </div></dialog>
+
+<!-- Del -->
+<dialog id="partDlg"><form class="dlg" id="partForm">
+  <div id="partView"></div>
+  <div id="partEdit">
+    <h2 id="partEditTitle">Ny del</h2>
+    <label>Navn *</label><input name="name" required placeholder="F.eks. Impeller sjøvannspumpe">
+    <div class="row">
+      <div><label>Delenummer</label><input name="no" inputmode="numeric" placeholder="F.eks. 2295719"></div>
+      <div><label>Kategori</label><input name="cat" list="partCats" placeholder="F.eks. Kjøling"></div>
+    </div>
+    <datalist id="partCats"></datalist>
+  </div>
+  <label>Notat – plassering ombord, antall, leverandør</label>
+  <textarea name="note" style="min-height:70px" placeholder="F.eks. 2 stk i hylle 3, maskinverksted"></textarea>
+  <div class="btns">
+    <button type="button" class="btn del" id="partDelBtn" hidden>Slett</button>
+    <button type="button" class="btn sec" data-close>Lukk</button>
+    <button type="submit" class="btn pri">Lagre</button>
+  </div>
+</form></dialog>
 
 <!-- Meny -->
 <dialog id="menuDlg"><div class="dlg">
@@ -652,12 +682,14 @@
     $('tabJobs').classList.toggle('on', state.tab === 'jobs');
     $('fab').hidden = state.tab === 'jobs';
     $('tabMachines').classList.toggle('on', state.tab === 'machines');
+    $('tabParts').classList.toggle('on', state.tab === 'parts');
     const due = dueJobs(), over = due.filter(x => x.s.cls === 'bad').length;
     const bb = $('bellBadge');
     bb.hidden = !due.length; bb.textContent = due.length; bb.className = 'hbadge' + (over ? '' : ' warn');
     const m = curMachine();
     if (state.tab === 'journal') return renderJournal();
     if (state.tab === 'jobs') return renderJobs();
+    if (state.tab === 'parts') return renderParts();
     if (!m) { state.machineId = null; renderList(); } else renderMachine(m);
   }
 
@@ -793,6 +825,137 @@
   $('photoAdd').onchange = async () => {
     const files = [...$('photoAdd').files]; $('photoAdd').value = ''; if (!files.length) return;
     const ids = await addPhotos(files); newPhotos.push(...ids); editPhotos.push(...ids); renderPhotoEdit();
+  };
+
+  // ---------- Deleliste Scania DI13 ----------
+  // Hentet fra Scania delekatalog DI13 marinemotorer (PDE) og forhandlere. Sjekk alltid mot motornummer før bestilling.
+  const PARTS = [
+ {"id":"d1","cat":"Filter og service","name":"Vedlikeholdssett (PDE)","no":"2149394","grp":"00-23-6008/6009/6010","conf":2,"alias":"maintenance kit servicesett filtersett","src":"cat"},
+ {"id":"d2","cat":"Filter og service","name":"Oljefilter","no":"2059778","grp":"00-23 / 01-20-6111","conf":3,"alias":"oil filter smøreoljefilter","src":"cat"},
+ {"id":"d3","cat":"Filter og service","name":"Sentrifugalrenser, komplett","no":"1776593","alt":"2304242","grp":"01-20-6110","conf":2,"alias":"centrifugal oil cleaner rotor sentrifuge","src":"cat"},
+ {"id":"d4","cat":"Filter og service","name":"O-ring sentrifugalrenser Ø133 x 3,53","no":"1769799","grp":"01-20-6110","conf":3,"alias":"oring pakning sentrifuge","src":"cat"},
+ {"id":"d5","cat":"Filter og service","name":"O-ring sentrifugalrenser Ø117 x 3,53","no":"1769800","grp":"01-20-6110","conf":3,"alias":"oring pakning sentrifuge","src":"cat"},
+ {"id":"d6","cat":"Filter og service","name":"Tetning i sentrifugalrenser-sett (beskrivelse uklar)","no":"372983","grp":"00-23-6008","conf":1,"alias":"oring pakning","src":"cat"},
+ {"id":"d7","cat":"Filter og service","name":"Tetningsskive 24,2 x 4,2 (i servicesett)","no":"1439814","grp":"00-23-6008","conf":2,"alias":"skive pakning bunnplugg","src":"cat"},
+ {"id":"d8","cat":"Filter og service","name":"Luftfilter","no":"1529410","grp":"01-45-6108/6109","conf":3,"alias":"air filter luftrenser","src":"cat,fp"},
+ {"id":"d9","cat":"Filter og service","name":"Luftfilterinnsats, papir","no":"2153365","grp":"00-23 (merknad 01-45)","conf":1,"alias":"air filter insert element","src":"cat"},
+ {"id":"d10","cat":"Drivstoff","name":"Drivstoffilterenhet (element, hode, kopp)","no":"1393639","grp":"03-05-6102","conf":2,"alias":"fuel filter dieselfilter","src":"cat"},
+ {"id":"d11","cat":"Drivstoff","name":"Drivstoffilter / vannutskiller 30 µm","no":"1393640","grp":"03-05-6102","conf":3,"alias":"fuel filter water separator forfilter dieselfilter","src":"cat,fi"},
+ {"id":"d12","cat":"Drivstoff","name":"Drivstoffilter 10 µm","no":"1518512","grp":"03-05-6102","conf":2,"alias":"fuel filter dieselfilter fin","src":"cat"},
+ {"id":"d13","cat":"Drivstoff","name":"Forfilter-element med vannutskiller","no":"1773375","grp":"03-05-6114","conf":2,"alias":"prefilter water separator element vannutskiller","src":"cat"},
+ {"id":"d14","cat":"Drivstoff","name":"Forfilter, komplett","no":"1769500","grp":"03-05-6114","conf":2,"alias":"prefilter assembly vannutskiller","src":"cat"},
+ {"id":"d15","cat":"Drivstoff","name":"Tappekran forfilter","no":"1769604","grp":"03-05-6114","conf":2,"alias":"drain tap kran","src":"cat"},
+ {"id":"d16","cat":"Drivstoff","name":"Filterhode drivstoffilter (DI13M)","no":"1362289","grp":"03-05-6111/6118","conf":3,"alias":"filter head","src":"cat"},
+ {"id":"d17","cat":"Kjøling","name":"Termostat 80/87 °C (varmeveksler)","no":"1935712","grp":"02-15-6101","conf":3,"alias":"thermostat","src":"cat"},
+ {"id":"d18","cat":"Kjøling","name":"Termostat 75/88 °C (kjølekasse/keel cooling)","no":"1892379","alt":"1721024","grp":"02-15-6102","conf":2,"alias":"thermostat","src":"cat"},
+ {"id":"d19","cat":"Kjøling","name":"Sjøvannspumpe 190 l/min","no":"1785018","alt":"1856264 (klasse)","grp":"02-25-6102","conf":3,"alias":"sea water pump impellerpumpe saltvannspumpe","src":"cat,mm"},
+ {"id":"d20","cat":"Kjøling","name":"Sjøvannspumpe 280 l/min","no":"1785016","alt":"1785017 (klasse)","grp":"02-25-6102","conf":2,"alias":"sea water pump impellerpumpe saltvannspumpe","src":"cat"},
+ {"id":"d21","cat":"Kjøling","name":"Reparasjonssett sjøvannspumpe","no":"2295719","grp":"02-25-6102/6104","conf":2,"alias":"repair kit sea water pump impeller","src":"cat"},
+ {"id":"d22","cat":"Kjøling","name":"Impeller sjøvannspumpe 190 l/min","no":"2295736","grp":"02-25-6102","conf":1,"alias":"impeller","src":"cat"},
+ {"id":"d23","cat":"Kjøling","name":"Impeller sjøvannspumpe 280 l/min","no":"2295735","grp":"02-25-6102","conf":1,"alias":"impeller","src":"cat"},
+ {"id":"d24","cat":"Kjøling","name":"Kjølevæskepumpe","no":"2224112","alt":"2006397","grp":"02-25-6002","conf":2,"alias":"coolant pump vannpumpe ferskvannspumpe","src":"cat"},
+ {"id":"d25","cat":"Kjøling","name":"Offeranode L=63 mm","no":"1331819","grp":"02-01-6102 / 02-05-6106","conf":2,"alias":"sacrificial anode sink zink offeranode","src":"cat"},
+ {"id":"d26","cat":"Kjøling","name":"Plugg til offeranode","no":"1327056","grp":"02-01-6102 / 02-05-6106","conf":2,"alias":"plug anode","src":"cat"},
+ {"id":"d27","cat":"Reimer","name":"Poly-V-reim L=2605 mm (DI13M)","no":"2147228","grp":"02-35-6112","conf":3,"alias":"belt rem reim drivreim","src":"cat"},
+ {"id":"d28","cat":"Reimer","name":"Poly-V-reim L=2630 mm","no":"1923312","grp":"02-35-6101/6103","conf":3,"alias":"belt rem reim drivreim","src":"cat,mc"},
+ {"id":"d29","cat":"Reimer","name":"Poly-V-reim L=2720 mm","no":"1923314","grp":"02-35-6104","conf":3,"alias":"belt rem reim drivreim","src":"cat"},
+ {"id":"d30","cat":"Reimer","name":"Poly-V-reim L=2740 mm","no":"1923313","grp":"02-35-6108","conf":3,"alias":"belt rem reim drivreim","src":"cat"},
+ {"id":"d31","cat":"Reimer","name":"Poly-V-reim L=2475 mm","no":"1920231","grp":"02-35-6107","conf":3,"alias":"belt rem reim drivreim","src":"cat"},
+ {"id":"d32","cat":"Reimer","name":"Reimstrammer","no":"2192038","alt":"2197391","grp":"02-35-6101/6112","conf":3,"alias":"belt tensioner strammer","src":"cat,mc"},
+ {"id":"d33","cat":"Motor","name":"Pakningssett topplokk","no":"2117945","grp":"01-99-6102","conf":2,"alias":"gasket kit cylinder head toppakning","src":"cat"},
+ {"id":"d34","cat":"Motor","name":"Pakning eksosmanifold","no":"1516474","grp":"01-99-6102","conf":2,"alias":"exhaust manifold gasket","src":"cat"},
+ {"id":"d35","cat":"Motor","name":"Pakning innsugsmanifold","no":"2042940","grp":"01-99-6102","conf":2,"alias":"intake manifold gasket","src":"cat"},
+ {"id":"d36","cat":"Motor","name":"Injektorpakning","no":"2016583","grp":"01-99-6102","conf":2,"alias":"injector gasket dyse","src":"cat"},
+ {"id":"d37","cat":"Motor","name":"Reparasjonssett pumpedyse (PDE)","no":"1731209","grp":"03-99-1000","conf":2,"alias":"unit injector repair kit dyse injektor","src":"cat"},
+ {"id":"d38","cat":"Motor","name":"Ventildekselpakning","no":"2071589","grp":"01-01-6101","conf":1,"alias":"rocker cover gasket vippedeksel","src":"cat"},
+ {"id":"d39","cat":"Motor","name":"Oljeutskiller veivhusventilasjon","no":"2139832","grp":"01-05-6122","conf":1,"alias":"oil mist separator crankcase ventilation","src":"cat"}
+]
+;
+  const PSRC = {
+    cat: ['Delekatalog DI13 marine (Scania)', 'https://pdfcoffee.com/parts-catalogue-di13-marine-engines-pdf-free.html'],
+    fp: ['FridayParts – luftfilter DI13', 'https://www.fridayparts.com/air-filter-1529410-for-scania-engine-di-13-tier-iii'],
+    mc: ['Mecanautik – DI9/DI13', 'https://mecanautik.com/en/coolant-water-pumps/321-belt-tensioner-di9-di13-sc2197391s.html'],
+    mm: ['Maritimus – sjøvannspumpe DI13', 'https://www.maritimusboote.de/Replacement-for-cooling-water-pump-1785018-Scania-Engine-Model-D9-DI12-DI13-DI16-SERIES'],
+    fi: ['FinditParts – Scania filtre', 'https://www.finditparts.com/t/4877/manufacturer/scania/categories/air-and-fuel-delivery/filters/']
+  };
+  const CONF = ['Egen', 'Usikker – sjekk', 'Sannsynlig', 'Sikker kobling'];
+  const fmtNo = n => String(n || '').replace(/\D/g,'').replace(/^(\d)(\d{3})(\d{3})$/, '$1 $2 $3').replace(/^(\d{3})(\d{3})$/, '$1 $2') || (n || '');
+  const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ø/g,'o').replace(/æ/g,'ae').replace(/å/g,'a');
+  function allParts(){
+    db.parts = db.parts || []; db.partNotes = db.partNotes || {};
+    return PARTS.map(p => ({ ...p, builtin: true, note: db.partNotes[p.id] || '' }))
+      .concat(db.parts.map(p => ({ ...p, conf: 0, builtin: false })));
+  }
+  function partMatch(p, q){
+    if (!q) return true;
+    const hay = norm([p.name, p.cat, p.alias, p.grp, p.note, p.no, p.alt].join(' ')), digits = String([p.no, p.alt].join(' ')).replace(/\D/g,'');
+    return norm(q).split(/\s+/).filter(Boolean).every(w => /^\d[\d ]*$/.test(w) ? digits.includes(w.replace(/\D/g,'')) || hay.includes(w) : hay.includes(w));
+  }
+  function renderParts(){
+    titleEl.textContent = 'Deler – Scania DI13';
+    backBtn.hidden = true; editMachineBtn.hidden = true;
+    const f = state.filter || 'alle', q = state.q.trim();
+    const all = allParts(), cats = [...new Set(all.map(p => p.cat || 'Annet'))];
+    let list = all.filter(p => (f === 'alle' || (p.cat || 'Annet') === f) && partMatch(p, q));
+    const chip = (v, l) => `<button class="chip ${f===v?'on':''}" data-f="${esc(v)}">${esc(l)}</button>`;
+    let h = `<input class="search" id="search" type="search" placeholder="Søk navn eller nummer, f.eks. impeller, 2295719, reim" value="${esc(state.q)}">
+      <div class="chips">${chip('alle','Alle')}${cats.map(c => chip(c, c)).join('')}</div>`;
+    if (!q && f === 'alle') h += `<div class="pwarn">⚠️ Delenumrene er hentet fra Scania delekatalog for DI13 marinemotor og fra forhandlere. Varianter finnes (PDE/XPI, pumpestørrelse, reimoppsett) – <b>sjekk alltid mot motornummeret</b> før bestilling.</div>`;
+    let grp = null;
+    for (const p of list){
+      const c = p.cat || 'Annet';
+      if (c !== grp){ grp = c; h += `<div class="grp">${esc(c)}</div>`; }
+      h += `<div class="card part" data-part="${p.id}"><div class="pb"><b>${esc(p.name)}</b><span class="conf c${p.conf}">${CONF[p.conf]}</span>
+          <div class="sub">${p.grp ? 'Gruppe ' + esc(p.grp) : ''}${p.alt ? (p.grp ? ' · ' : '') + 'alt. ' + esc(p.alt) : ''}</div>
+          ${p.note ? `<div class="pnote">📍 ${esc(p.note)}</div>` : ''}</div>
+        <div class="pno">${esc(fmtNo(p.no))}</div></div>`;
+    }
+    if (!list.length) h += `<div class="empty"><div class="big">🔩</div><p>Ingen treff. Trykk <b>+</b> for å legge til delen selv.</p></div>`;
+    view.innerHTML = h; bindSearch();
+  }
+  const partDlg = $('partDlg'), partForm = $('partForm');
+  let editingPart = null;
+  function openPartDlg(id){
+    const p = id ? allParts().find(x => x.id === id) : null; editingPart = p;
+    partForm.reset();
+    $('partDelBtn').hidden = !(p && !p.builtin);
+    $('partCats').innerHTML = [...new Set(allParts().map(x => x.cat).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('');
+    if (p && p.builtin){
+      $('partEdit').hidden = true;
+      partForm.name.required = false;
+      const srcs = (p.src || '').split(',').filter(k => PSRC[k]);
+      $('partView').innerHTML = `<h2 style="margin-bottom:2px">${esc(p.name)}</h2><span class="conf c${p.conf}" style="margin-left:0">${CONF[p.conf]}</span>
+        <div style="display:flex;align-items:center;gap:10px;margin:12px 0 4px"><div class="bigno">${esc(fmtNo(p.no))}</div>
+          <button type="button" class="chip" id="copyNo">Kopier</button></div>
+        ${p.alt ? `<p class="sub" style="margin:0">Alternativ: ${esc(p.alt)}</p>` : ''}
+        <p class="sub" style="margin:6px 0 0">${esc(p.cat)}${p.grp ? ' · katalog­gruppe ' + esc(p.grp) : ''}</p>
+        <p class="sub" style="margin:6px 0 0">Kilde: ${srcs.map(k => `<a href="${PSRC[k][1]}" target="_blank" rel="noopener">${esc(PSRC[k][0])}</a>`).join(' · ')}</p>
+        ${p.conf <= 1 ? '<p class="missing sub" style="margin:6px 0 0">Nummeret er usikkert koblet i katalogen – sjekk før bestilling.</p>' : ''}`;
+      $('copyNo').onclick = async () => { try { await navigator.clipboard.writeText(String(p.no)); toast('Delenummer kopiert'); } catch(e){ toast(String(p.no)); } };
+      partForm.note.value = p.note || '';
+    } else {
+      $('partView').innerHTML = ''; $('partEdit').hidden = false; partForm.name.required = true;
+      $('partEditTitle').textContent = p ? 'Rediger del' : 'Ny del';
+      if (p){ partForm.name.value = p.name; partForm.no.value = p.no || ''; partForm.cat.value = p.cat || ''; partForm.note.value = p.note || ''; }
+    }
+    partDlg.showModal();
+  }
+  partForm.addEventListener('submit', e => {
+    e.preventDefault();
+    db.parts = db.parts || []; db.partNotes = db.partNotes || {};
+    const note = partForm.note.value.trim();
+    if (editingPart && editingPart.builtin){ if (note) db.partNotes[editingPart.id] = note; else delete db.partNotes[editingPart.id]; }
+    else {
+      const data = { name: partForm.name.value.trim(), no: partForm.no.value.trim(), cat: partForm.cat.value.trim() || 'Egne deler', note };
+      if (!data.name) return;
+      if (editingPart){ Object.assign(db.parts.find(x => x.id === editingPart.id), data); }
+      else db.parts.push({ id: 'u' + uid(), ...data });
+    }
+    save(); partDlg.close(); render(); toast('Lagret');
+  });
+  $('partDelBtn').onclick = async () => {
+    if (!editingPart || editingPart.builtin || !await ask(`Slette «${editingPart.name}»?`, 'Slett')) return;
+    db.parts = db.parts.filter(x => x.id !== editingPart.id); save(); partDlg.close(); render(); toast('Slettet');
   };
 
   // ---------- Til CCOM ----------
@@ -964,6 +1127,7 @@
     if (t.closest('#newDayBtn')) return newDay();
     if (t.closest('#ccomBar')) return openCcom();
     const qd = t.closest('[data-qdone]'); if (qd){ const m = machineById(qd.dataset.qdone); return quickDone(m, m.jobs.find(x => x.id === qd.dataset.jid)); }
+    const pt = t.closest('[data-part]'); if (pt) return openPartDlg(pt.dataset.part);
     const op = t.closest('[data-open]'); if (op){ const m = machineById(op.dataset.open); return openDoneDlg(m, m.jobs.find(x => x.id === op.dataset.jid)); }
     const qb = t.closest('[data-quick]'); if (qb){
       const p = QUICK[+qb.dataset.quick], mid = lastMachine(), m = machineById(mid);
@@ -1027,6 +1191,7 @@
   }
   $('tabJournal').onclick = () => setTab('journal');
   $('tabJobs').onclick = () => setTab('jobs');
+  $('tabParts').onclick = () => setTab('parts');
   $('bellBtn').onclick = () => {
     const due = dueJobs();
     $('dueList').innerHTML = due.length ? due.map(x => `<div class="duerow" data-goto="${x.m.id}" data-jid="${x.j.id}">
@@ -1384,7 +1549,7 @@
     from.splice(from.indexOf(editingEntry), 1); save(); entryDlg.close(); render(); toast('Slettet');
   };
 
-  $('fab').onclick = () => (state.tab === 'journal' || state.tab === 'jobs') ? openEntryDlg(null, null, null) : state.machineId ? openEntryDlg(null) : openMachineDlg(null);
+  $('fab').onclick = () => state.tab === 'parts' ? openPartDlg(null) : (state.tab === 'journal' || state.tab === 'jobs') ? openEntryDlg(null, null, null) : state.machineId ? openEntryDlg(null) : openMachineDlg(null);
 
   // ---------- Meny ----------
   const menuDlg = $('menuDlg');
@@ -1649,7 +1814,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '17';
+  const APP_VERSION = '18';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
