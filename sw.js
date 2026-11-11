@@ -1,4 +1,4 @@
-const VERSION = "23";
+const VERSION = "24";
 const CACHE = "maskindagbok-v" + VERSION;
 const FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 self.addEventListener("install", e => {
