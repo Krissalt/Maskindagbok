@@ -135,6 +135,18 @@
   .conf.c3{background:#e3f3ea;color:var(--ok)} .conf.c2{background:#e7eef3;color:var(--brand)} .conf.c1{background:#fcefe2;color:var(--warn)} .conf.c0{background:#eee;color:#555}
   .pnote{font-size:.8rem;color:var(--ok);margin-top:2px}
   .bigno{font-size:1.8rem;font-weight:800;letter-spacing:.04em;color:var(--brand);font-variant-numeric:tabular-nums}
+  .plist{margin-top:4px}
+  .pl{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:.92rem}
+  .pl .pn{flex:1;min-width:0}
+  .pl .pn small{display:block;color:var(--muted)}
+  .pl input[type=number]{width:58px;padding:6px 8px;text-align:center}
+  .pl input[type=checkbox]{width:22px;height:22px;accent-color:var(--ok)}
+  .pl .pp{white-space:nowrap;font-variant-numeric:tabular-nums;min-width:70px;text-align:right}
+  .pl .px2{border:0;background:none;color:var(--bad);font-size:1rem;cursor:pointer;padding:4px}
+  .ptotal{display:flex;justify-content:space-between;font-weight:700;padding:8px 0 0}
+  .addpart{background:none;border:1px dashed var(--line);border-radius:10px;padding:9px;width:100%;margin-top:8px;font:inherit;color:var(--brand);font-weight:600;cursor:pointer}
+  .pick{display:flex;justify-content:space-between;gap:8px;padding:11px 2px;border-bottom:1px solid var(--line);cursor:pointer}
+  .pick .pno{font-weight:700;color:var(--brand);white-space:nowrap;font-variant-numeric:tabular-nums}
   .day{font-size:.8rem;font-weight:700;color:var(--muted);margin:16px 4px 6px}
   .jentry{display:flex;gap:12px;cursor:pointer}
   .jentry .time{font-weight:700;font-variant-numeric:tabular-nums;min-width:44px;color:var(--brand)}
@@ -277,6 +289,8 @@
     <div id="lastDWrap"><label>Sist utført</label><input name="lastDate" type="date"></div>
   </div>
   <label>Beskrivelse</label><textarea name="desc" placeholder="Hva skal gjøres"></textarea>
+  <label>Deler til jobben</label>
+  <div class="plist" id="jobParts"></div>
   <div class="btns">
     <button type="button" class="btn del" id="jobDelBtn" hidden>Slett</button>
     <button type="button" class="btn sec" data-close>Avbryt</button>
@@ -293,6 +307,7 @@
     <div><label>Timeteller nå</label><input name="hours" type="number" inputmode="decimal" min="0" step="0.1"></div>
     <div><label>Utført av</label><input name="by" placeholder="Valgfritt"></div>
   </div>
+  <div id="doneParts"></div>
   <label>Hva ble gjort? (valgfritt)</label>
   <div class="notechips" id="noteChips"></div>
   <textarea name="note" style="min-height:70px" placeholder="F.eks. byttet impeller og pakning, olje 15W-40"></textarea>
@@ -383,6 +398,10 @@
     </div>
     <datalist id="partCats"></datalist>
   </div>
+  <div class="row">
+    <div><label>Pris per stk (kr)</label><input name="price" type="number" inputmode="decimal" min="0" step="1" placeholder="F.eks. fra FilterPro"></div>
+    <div><label>Leverandør / art.nr</label><input name="sup" placeholder="F.eks. FilterPro 12345"></div>
+  </div>
   <label>Notat – plassering ombord, antall, leverandør</label>
   <textarea name="note" style="min-height:70px" placeholder="F.eks. 2 stk i hylle 3, maskinverksted"></textarea>
   <div class="btns">
@@ -391,6 +410,14 @@
     <button type="submit" class="btn pri">Lagre</button>
   </div>
 </form></dialog>
+
+<!-- Velg del -->
+<dialog id="pickDlg"><div class="dlg">
+  <h2>Legg til del</h2>
+  <input class="search" id="pickSearch" type="search" placeholder="Søk navn eller nummer" style="margin-top:8px">
+  <div id="pickList" style="max-height:55vh;overflow:auto"></div>
+  <div class="btns"><button type="button" class="btn pri" data-close>Ferdig</button></div>
+</div></dialog>
 
 <!-- Meny -->
 <dialog id="menuDlg"><div class="dlg">
@@ -721,6 +748,7 @@
             ${estLine(e)}
             ${e.type === 'maskinrunde' ? bunkerLine(e) : ''}
             ${['drivstoff','overforing'].includes(e.type) ? (e.received ? `<div class="sub" style="margin-top:2px">${e.type === 'overforing' ? '🚢 Overført' : '⛽ Mottatt'} ${fmtL(e.received)} L</div>` : '<div class="missing sub" style="margin-top:2px">Liter ikke fylt inn</div>') : ''}
+            ${partsLine(e)}
             ${thumbs(e)}
             ${(e.hours != null || e.by || e.cost) ? `<div class="meta sub" style="margin-top:4px;display:flex;gap:12px;flex-wrap:wrap">
               ${e.hours != null ? `<span>⏱️ ${fmtH(e.hours)} t</span>` : ''}${e.by ? `<span>👤 ${esc(e.by)}</span>` : ''}${e.cost ? `<span>💰 ${Math.round(e.cost).toLocaleString('no-NO')} kr</span>` : ''}</div>` : ''}
@@ -751,7 +779,7 @@
         <div class="card job ${s.cls} jrow">
           <div class="jbody" data-open="${m.id}" data-jid="${j.id}">
             <b>${esc(j.name)}</b>
-            <span class="sub">${esc(m.name)} · ${jobEvery(j)}</span>
+            <span class="sub">${esc(m.name)} · ${jobEvery(j)}${jobPartLines(j).length ? ` · 🔩 ${jobPartLines(j).length}${lineSum(jobPartLines(j)) != null ? ' · ' + fmtKr(lineSum(jobPartLines(j))) : ''}` : ''}</span>
             <span class="pill ${s.cls}" style="margin-top:4px">${s.text}</span>
           </div>
           <button class="qdone" data-qdone="${m.id}" data-jid="${j.id}" aria-label="Utført">✓</button>
@@ -792,6 +820,7 @@
     for (const f of files){ try { const b = await compress(f); const id = 'p' + uid(); await photoPut(id, b); ids.push(id); } catch(e){ toast('Kunne ikke lagre bildet'); } }
     return ids;
   }
+  const partsLine = e => (e.parts && e.parts.length) ? `<div class="sub" style="margin-top:3px">🔩 ${e.parts.map(p => esc(p.name) + (p.qty > 1 ? ' ×' + p.qty : '')).join(' · ')}</div>` : '';
   const thumbs = e => (e.photos && e.photos.length) ? `<div class="thumbs">${e.photos.map(id => `<img data-photo="${id}" alt="Bilde">`).join('')}</div>` : '';
   async function hydratePhotos(root = document){
     for (const img of root.querySelectorAll('img[data-photo]:not([src])')){ const u = await photoUrl(img.dataset.photo); if (u) img.src = u; else img.alt = 'Bilde mangler'; }
@@ -879,16 +908,20 @@
     fi: ['FinditParts – Scania filtre', 'https://www.finditparts.com/t/4877/manufacturer/scania/categories/air-and-fuel-delivery/filters/']
   };
   const CONF = ['Egen', 'Usikker – sjekk', 'Sannsynlig', 'Sikker kobling'];
+  const fmtKr = v => v == null ? '–' : Math.round(v).toLocaleString('no-NO') + ' kr';
+  const partById = id => allParts().find(p => p.id === id);
   const fmtNo = n => String(n || '').replace(/\D/g,'').replace(/^(\d)(\d{3})(\d{3})$/, '$1 $2 $3').replace(/^(\d{3})(\d{3})$/, '$1 $2') || (n || '');
   const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ø/g,'o').replace(/æ/g,'ae').replace(/å/g,'a');
   function allParts(){
     db.parts = db.parts || []; db.partNotes = db.partNotes || {};
-    return PARTS.map(p => ({ ...p, builtin: true, note: db.partNotes[p.id] || '' }))
+    db.partPrices = db.partPrices || {};
+    db.partSup = db.partSup || {};
+    return PARTS.map(p => ({ ...p, builtin: true, note: db.partNotes[p.id] || '', price: db.partPrices[p.id] ?? null, sup: db.partSup[p.id] || '' }))
       .concat(db.parts.map(p => ({ ...p, conf: 0, builtin: false })));
   }
   function partMatch(p, q){
     if (!q) return true;
-    const hay = norm([p.name, p.cat, p.alias, p.grp, p.note, p.no, p.alt].join(' ')), digits = String([p.no, p.alt].join(' ')).replace(/\D/g,'');
+    const hay = norm([p.name, p.cat, p.alias, p.grp, p.note, p.no, p.alt, p.sup].join(' ')), digits = String([p.no, p.alt, p.sup].join(' ')).replace(/\D/g,'');
     return norm(q).split(/\s+/).filter(Boolean).every(w => /^\d[\d ]*$/.test(w) ? digits.includes(w.replace(/\D/g,'')) || hay.includes(w) : hay.includes(w));
   }
   function renderParts(){
@@ -907,8 +940,9 @@
       if (c !== grp){ grp = c; h += `<div class="grp">${esc(c)}</div>`; }
       h += `<div class="card part" data-part="${p.id}"><div class="pb"><b>${esc(p.name)}</b><span class="conf c${p.conf}">${CONF[p.conf]}</span>
           <div class="sub">${p.grp ? 'Gruppe ' + esc(p.grp) : ''}${p.alt ? (p.grp ? ' · ' : '') + 'alt. ' + esc(p.alt) : ''}</div>
+          ${p.sup ? `<div class="sub">🏷️ ${esc(p.sup)}</div>` : ''}
           ${p.note ? `<div class="pnote">📍 ${esc(p.note)}</div>` : ''}</div>
-        <div class="pno">${esc(fmtNo(p.no))}</div></div>`;
+        <div style="text-align:right"><div class="pno">${esc(fmtNo(p.no))}</div>${p.price != null ? `<div class="sub">${fmtKr(p.price)}</div>` : ''}</div></div>`;
     }
     if (!list.length) h += `<div class="empty"><div class="big">🔩</div><p>Ingen treff. Trykk <b>+</b> for å legge til delen selv.</p></div>`;
     view.innerHTML = h; bindSearch();
@@ -932,11 +966,11 @@
         <p class="sub" style="margin:6px 0 0">Kilde: ${srcs.map(k => `<a href="${PSRC[k][1]}" target="_blank" rel="noopener">${esc(PSRC[k][0])}</a>`).join(' · ')}</p>
         ${p.conf <= 1 ? '<p class="missing sub" style="margin:6px 0 0">Nummeret er usikkert koblet i katalogen – sjekk før bestilling.</p>' : ''}`;
       $('copyNo').onclick = async () => { try { await navigator.clipboard.writeText(String(p.no)); toast('Delenummer kopiert'); } catch(e){ toast(String(p.no)); } };
-      partForm.note.value = p.note || '';
+      partForm.note.value = p.note || ''; partForm.price.value = p.price ?? ''; partForm.sup.value = p.sup || '';
     } else {
       $('partView').innerHTML = ''; $('partEdit').hidden = false; partForm.name.required = true;
       $('partEditTitle').textContent = p ? 'Rediger del' : 'Ny del';
-      if (p){ partForm.name.value = p.name; partForm.no.value = p.no || ''; partForm.cat.value = p.cat || ''; partForm.note.value = p.note || ''; }
+      if (p){ partForm.name.value = p.name; partForm.no.value = p.no || ''; partForm.cat.value = p.cat || ''; partForm.note.value = p.note || ''; partForm.price.value = p.price ?? ''; partForm.sup.value = p.sup || ''; }
     }
     partDlg.showModal();
   }
@@ -944,9 +978,14 @@
     e.preventDefault();
     db.parts = db.parts || []; db.partNotes = db.partNotes || {};
     const note = partForm.note.value.trim();
-    if (editingPart && editingPart.builtin){ if (note) db.partNotes[editingPart.id] = note; else delete db.partNotes[editingPart.id]; }
+    const price = num(partForm.price.value); db.partPrices = db.partPrices || {};
+    if (editingPart && editingPart.builtin){
+      if (note) db.partNotes[editingPart.id] = note; else delete db.partNotes[editingPart.id];
+      if (price != null) db.partPrices[editingPart.id] = price; else delete db.partPrices[editingPart.id];
+      db.partSup = db.partSup || {}; const sup = partForm.sup.value.trim(); if (sup) db.partSup[editingPart.id] = sup; else delete db.partSup[editingPart.id];
+    }
     else {
-      const data = { name: partForm.name.value.trim(), no: partForm.no.value.trim(), cat: partForm.cat.value.trim() || 'Egne deler', note };
+      const data = { name: partForm.name.value.trim(), no: partForm.no.value.trim(), cat: partForm.cat.value.trim() || 'Egne deler', note, price, sup: partForm.sup.value.trim() };
       if (!data.name) return;
       if (editingPart){ Object.assign(db.parts.find(x => x.id === editingPart.id), data); }
       else db.parts.push({ id: 'u' + uid(), ...data });
@@ -981,7 +1020,8 @@
       h += `<label class="crow ${e.ccom ? 'done' : ''}"><input type="checkbox" data-ce="${m.id}|${e.id}" ${e.ccom ? 'checked' : ''}>
         <div class="cb"><b><span class="cno">#${j.ccomNo}</span> ${esc(j.name)}</b>
           <span class="sub">${fmtDate(e.date)}${e.time ? ' kl. ' + esc(e.time) : ''}${e.hours != null ? ` · ${fmtH(e.hours)} t` : e.hoursEst != null ? ` · ~${fmtH(e.hoursEst)} t` : ''}${e.by ? ' · ' + esc(e.by) : ''}${e.ccom ? ' · ført ' + fmtDate(e.ccom) : ''}</span>
-          ${note ? `<div class="sub" style="white-space:pre-wrap;color:var(--ink);margin-top:2px">${esc(note)}</div>` : ''}</div></label>`;
+          ${note ? `<div class="sub" style="white-space:pre-wrap;color:var(--ink);margin-top:2px">${esc(note)}</div>` : ''}
+          ${e.parts && e.parts.length ? `<div class="sub" style="margin-top:2px">🔩 ${e.parts.map(p => `${esc(p.name)} ${esc(fmtNo(p.no))}${p.qty > 1 ? ' ×' + p.qty : ''}`).join(' · ')}${e.cost ? ' · ' + fmtKr(e.cost) : ''}</div>` : ''}</div></label>`;
     }
     $('ccomList').innerHTML = h;
   }
@@ -997,16 +1037,67 @@
   $('ccomDlg').addEventListener('close', () => render());
   $('ccomCopy').onclick = async () => {
     const list = ccomView === 'pending' ? ccomPending() : ccomItems().filter(x => x.e.ccom);
-    const txt = list.map(({m,e,j}) => `#${j.ccomNo} ${j.name} – ${m.name}\n  Utført ${fmtDate(e.date)}${e.time ? ' kl. ' + e.time : ''}${e.hours != null ? `, ${fmtH(e.hours)} t` : e.hoursEst != null ? `, ~${fmtH(e.hoursEst)} t` : ''}${e.by ? ', ' + e.by : ''}${noteOf(e,j) ? '\n  ' + noteOf(e,j).replace(/\n/g, '\n  ') : ''}`).join('\n\n');
+    const txt = list.map(({m,e,j}) => `#${j.ccomNo} ${j.name} – ${m.name}\n  Utført ${fmtDate(e.date)}${e.time ? ' kl. ' + e.time : ''}${e.hours != null ? `, ${fmtH(e.hours)} t` : e.hoursEst != null ? `, ~${fmtH(e.hoursEst)} t` : ''}${e.by ? ', ' + e.by : ''}${noteOf(e,j) ? '\n  ' + noteOf(e,j).replace(/\n/g, '\n  ') : ''}${e.parts && e.parts.length ? '\n  Deler: ' + e.parts.map(p => `${p.name} ${p.no}${p.qty > 1 ? ' x' + p.qty : ''}`).join(', ') + (e.cost ? ` (${Math.round(e.cost)} kr)` : '') : ''}`).join('\n\n');
     try { await navigator.clipboard.writeText(txt || 'Ingen jobber'); toast('Kopiert'); } catch(err){ toast('Kunne ikke kopiere her'); }
   };
+
+  // ---------- Deler på jobber ----------
+  // j.parts = [{ pid, qty }]. Pris hentes fra delelista (pris per stk).
+  const jobPartLines = j => (j.parts || []).map(x => ({ ...x, p: partById(x.pid) })).filter(x => x.p);
+  const lineSum = lines => { let t = 0, any = false; for (const l of lines){ if (l.p.price != null){ t += l.p.price * (l.qty || 1); any = true; } } return any ? t : null; };
+  let jobPartsDraft = [];
+  function renderJobParts(){
+    const lines = jobPartsDraft.map(x => ({ ...x, p: partById(x.pid) })).filter(x => x.p);
+    $('jobParts').innerHTML = lines.map((l, i) => `<div class="pl"><div class="pn">${esc(l.p.name)}<small>${esc(fmtNo(l.p.no))}${l.p.price != null ? ' · ' + fmtKr(l.p.price) + '/stk' : ' · pris ikke satt'}</small></div>
+        <input type="number" min="1" step="1" value="${l.qty || 1}" data-jq="${i}" aria-label="Antall">
+        <button type="button" class="px2" data-jx="${i}" aria-label="Fjern">✕</button></div>`).join('')
+      + (lines.length ? `<div class="ptotal"><span>Sum deler</span><span>${fmtKr(lineSum(lines))}</span></div>` : '')
+      + `<button type="button" class="addpart" id="addJobPart">+ Legg til del fra delelista</button>`;
+  }
+  $('jobParts').addEventListener('click', e => {
+    const x = e.target.closest('[data-jx]'); if (x){ jobPartsDraft.splice(+x.dataset.jx, 1); return renderJobParts(); }
+    if (e.target.closest('#addJobPart')) openPicker(pid => {
+      const ex = jobPartsDraft.find(y => y.pid === pid); if (ex) ex.qty = (ex.qty || 1) + 1; else jobPartsDraft.push({ pid, qty: 1 });
+      renderJobParts();
+    });
+  });
+  $('jobParts').addEventListener('change', e => { const q = e.target.closest('[data-jq]'); if (q){ jobPartsDraft[+q.dataset.jq].qty = Math.max(1, num(q.value) || 1); renderJobParts(); } });
+  // Velg del
+  let pickCb = null;
+  function renderPick(){
+    const q = $('pickSearch').value.trim();
+    $('pickList').innerHTML = allParts().filter(p => partMatch(p, q)).slice(0, 60).map(p => `<div class="pick" data-pick="${p.id}"><span>${esc(p.name)}${p.price != null ? `<br><small class="sub">${fmtKr(p.price)}</small>` : ''}</span><span class="pno">${esc(fmtNo(p.no))}</span></div>`).join('')
+      || '<p class="sub">Ingen treff. Legg delen til i Deler-fanen først.</p>';
+  }
+  function openPicker(cb){ pickCb = cb; $('pickSearch').value = ''; renderPick(); $('pickDlg').showModal(); }
+  $('pickSearch').addEventListener('input', renderPick);
+  $('pickList').addEventListener('click', e => { const r = e.target.closest('[data-pick]'); if (r && pickCb){ pickCb(r.dataset.pick); toast('Lagt til'); } });
+  // I utført-vinduet: huk av delene som ble brukt
+  let doneLines = [];
+  function renderDoneParts(){
+    if (!doneLines.length){ $('doneParts').innerHTML = ''; return; }
+    const used = doneLines.filter(l => l.use);
+    $('doneParts').innerHTML = `<label>Deler brukt</label><div class="plist">${doneLines.map((l, i) => `<div class="pl">
+        <input type="checkbox" data-du="${i}" ${l.use ? 'checked' : ''} aria-label="Brukt">
+        <div class="pn">${esc(l.p.name)}<small>${esc(fmtNo(l.p.no))}</small></div>
+        <input type="number" min="1" step="1" value="${l.qty}" data-dq="${i}" aria-label="Antall">
+        <span class="pp">${l.p.price != null ? fmtKr(l.p.price * l.qty) : '–'}</span></div>`).join('')}
+      <div class="ptotal"><span>Sum</span><span>${fmtKr(lineSum(used))}</span></div></div>`;
+  }
+  $('doneParts').addEventListener('change', e => {
+    const u = e.target.closest('[data-du]'); if (u) doneLines[+u.dataset.du].use = u.checked;
+    const q = e.target.closest('[data-dq]'); if (q) doneLines[+q.dataset.dq].qty = Math.max(1, num(q.value) || 1);
+    renderDoneParts();
+  });
+  const partsSnapshot = lines => lines.map(l => ({ pid: l.pid, name: l.p.name, no: l.p.no, qty: l.qty || 1, price: l.p.price }));
 
   // Hurtigutfør: ett trykk, kan angres
   function quickDone(m, j){
     const prev = { lastHours: j.lastHours, lastDate: j.lastDate };
     const cur = currentHours(m);
     const en = { id: uid(), created: Date.now(), jobId: j.id, date: today(), time: nowTime(),
-      hours: null, hoursEst: isDayJob(j) ? undefined : cur, type: j.kind || 'service', desc: '✓ ' + j.name, by: '', cost: null };
+      hours: null, hoursEst: isDayJob(j) ? undefined : cur, type: j.kind || 'service', desc: '✓ ' + j.name, by: '',
+      cost: lineSum(jobPartLines(j)), parts: jobPartLines(j).length ? partsSnapshot(jobPartLines(j)) : undefined };
     m.entries.push(en);
     if (isDayJob(j)) j.lastDate = today(); else j.lastHours = cur ?? j.lastHours;
     save(); render();
@@ -1112,7 +1203,7 @@
             ${e.hours != null ? `<span>⏱️ ${fmtH(e.hours)} t</span>` : ''}
             ${e.by ? `<span>👤 ${esc(e.by)}</span>` : ''}
             ${e.cost ? `<span>💰 ${Math.round(e.cost).toLocaleString('no-NO')} kr</span>` : ''}
-          </div>${thumbs(e)}</div>`).join('')
+          </div>${partsLine(e)}${thumbs(e)}</div>`).join('')
         : `<div class="empty" style="padding:20px"><p>${m.entries.length ? 'Ingen treff.' : 'Ingen loggføringer ennå. Trykk <b>+</b> for å skrive, eller trykk på en jobb og så <b>✓ Utført</b>.'}</p></div>`}
       </div>`;
 
@@ -1305,6 +1396,7 @@
       const cur = currentHours(m); if (cur != null) jobForm.lastHours.value = cur;
       jobForm.unit.value = cur != null ? 'h' : 'd'; jobForm.lastDate.value = today();
     }
+    jobPartsDraft = j && j.parts ? j.parts.map(x => ({ ...x })) : []; renderJobParts();
     jobUnitUI(); jobDlg.showModal();
   }
   function jobUnitUI(){
@@ -1322,6 +1414,7 @@
     if (d) Object.assign(data, { intervalDays: iv, lastDate: f.lastDate.value || today(), interval: undefined, lastHours: undefined });
     else Object.assign(data, { interval: iv, lastHours: num(f.lastHours.value) ?? 0, intervalDays: undefined, lastDate: undefined });
     const tgt = editingJob || { id: uid() };
+    data.parts = jobPartsDraft.length ? jobPartsDraft.map(x => ({ pid: x.pid, qty: x.qty || 1 })) : undefined;
     Object.assign(tgt, data); Object.keys(tgt).forEach(k => tgt[k] === undefined && delete tgt[k]);
     if (!editingJob) m.jobs.push(tgt);
     save(); jobDlg.close(); render(); toast('Jobb lagret');
@@ -1407,6 +1500,7 @@
     $('doneDesc').innerHTML = j.desc ? `<div class="jobdesc"><b>Dette skal gjøres:</b>\n${esc(j.desc)}</div>` : '';
     const cur = currentHours(m); doneForm.hours.value = cur ?? '';
     renderNoteChips();
+    doneLines = jobPartLines(j).map(l => ({ ...l, qty: l.qty || 1, use: true })); renderDoneParts();
     const lastBy = allEntries().find(x => x.e.by); if (lastBy) doneForm.by.value = lastBy.e.by;
     doneDlg.showModal();
   }
@@ -1440,7 +1534,8 @@
     const cur = currentHours(m);
     const note = doneForm.note.value.trim();
     m.entries.push({ id: uid(), created: Date.now(), jobId: j.id, date: today(), time: nowTime(), hours: h, hoursMissing: h == null && !isDayJob(j),
-      type: j.kind || 'service', desc: '✓ ' + j.name + (note ? '\n' + note : ''), by: doneForm.by.value.trim(), cost: null });
+      type: j.kind || 'service', desc: '✓ ' + j.name + (note ? '\n' + note : ''), by: doneForm.by.value.trim(),
+      cost: lineSum(doneLines.filter(l => l.use)), parts: doneLines.some(l => l.use) ? partsSnapshot(doneLines.filter(l => l.use)) : undefined });
     if (isDayJob(j)) j.lastDate = today(); else j.lastHours = h ?? cur ?? j.lastHours;
     if (note){ j.notes = [note, ...(j.notes || []).filter(x => x !== note)].slice(0, 8); }
     save(); doneDlg.close(); render(); { const s2 = jobState(m, j); toast(`✓ ${j.name} utført – neste ${s2.day ? fmtDate(s2.next) : 'ved ' + fmtH(s2.next) + ' t'}`); }
@@ -1814,7 +1909,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '18';
+  const APP_VERSION = '19';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
