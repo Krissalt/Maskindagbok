@@ -342,13 +342,15 @@
   <select name="type" required></select>
   <div id="recvWrap" hidden><label id="recvLabel">⛽ Mottatt (liter)</label><input name="received" type="number" inputmode="numeric" min="0" step="1" placeholder="F.eks. 12000"></div>
   <div id="bunkerWrap" hidden><label>⛽ Bunkersbeholdning (liter)</label><input name="bunker" type="number" inputmode="numeric" min="0" step="1" placeholder="F.eks. 42300"><p class="hint" id="bunkerHint"></p></div>
+  <label>Deler brukt</label>
+  <div class="plist" id="entryParts"></div>
   <label>Bilder</label>
   <div class="pedit" id="photoEdit"></div>
   <label>Hva ble gjort / observert</label>
   <textarea name="desc" placeholder="F.eks. Skiftet motorolje og oljefilter"></textarea>
   <div class="row">
     <div><label>Utført av</label><input name="by" placeholder="Valgfritt"></div>
-    <div><label>Kostnad (kr)</label><input name="cost" type="number" inputmode="decimal" min="0" step="1" placeholder="Valgfritt"></div>
+    <div><label>Kostnad (kr)</label><input name="cost" type="number" inputmode="decimal" min="0" step="any" placeholder="Valgfritt"></div>
   </div>
   <div class="btns">
     <button type="button" class="btn del" id="entryDelBtn" hidden>Slett</button>
@@ -427,10 +429,19 @@
   <div class="btns"><button type="button" class="btn pri" data-close>Ferdig</button></div>
 </div></dialog>
 
+<!-- Kostnader -->
+<dialog id="costDlg"><div class="dlg">
+  <h2>💰 Kostnader</h2>
+  <div class="chips" style="margin-top:10px" id="costPeriods"></div>
+  <div id="costBody"></div>
+  <div class="btns"><button type="button" class="btn pri" data-close>Lukk</button></div>
+</div></dialog>
+
 <!-- Meny -->
 <dialog id="menuDlg"><div class="dlg">
   <h2>Meny</h2>
   <div class="menu-list">
+    <button id="costBtn">💰 Kostnader</button>
     <button id="ccomBtn">📤 Til CCOM</button>
     <button id="printBtn">🖨️ Skriv ut / lagre som PDF</button>
     <button id="exportBtn">⬇️ Last ned sikkerhetskopi (JSON)</button>
@@ -749,7 +760,8 @@
     } else {
       let day = null;
       for (const {e,m} of list){
-        if (e.date !== day){ day = e.date; const k = turnusDay(day); html += `<div class="day">${dayLabel(day)} · ${fmtDate(day)}${k ? ` · dag ${k}/${db.turnus.on}` : ''}</div>`; }
+        if (e.date !== day){ day = e.date; const k = turnusDay(day); const dc = list.filter(x => x.e.date === day).reduce((t, x) => t + (x.e.cost || 0), 0);
+          html += `<div class="day">${dayLabel(day)} · ${fmtDate(day)}${k ? ` · dag ${k}/${db.turnus.on}` : ''}${dc ? ` · 💰 ${fmtKr(dc)}` : ''}</div>`; }
         html += `<div class="card jentry" data-eid="${e.id}" data-mid="${m ? m.id : ''}">
           <div class="time">${esc(e.time || '–')}</div>
           <div class="body">
@@ -763,7 +775,7 @@
             ${partsLine(e)}
             ${thumbs(e)}
             ${(e.hours != null || e.by || e.cost) ? `<div class="meta sub" style="margin-top:4px;display:flex;gap:12px;flex-wrap:wrap">
-              ${e.hours != null ? `<span>⏱️ ${fmtH(e.hours)} t</span>` : ''}${e.by ? `<span>👤 ${esc(e.by)}</span>` : ''}${e.cost ? `<span>💰 ${Math.round(e.cost).toLocaleString('no-NO')} kr</span>` : ''}</div>` : ''}
+              ${e.hours != null ? `<span>⏱️ ${fmtH(e.hours)} t</span>` : ''}${e.by ? `<span>👤 ${esc(e.by)}</span>` : ''}${e.cost ? `<span>💰 ${fmtKr(e.cost)}</span>` : ''}</div>` : ''}
           </div></div>`;
       }
     }
@@ -972,6 +984,56 @@
     db.parts = db.parts.filter(x => x.id !== editingPart.id); save(); partDlg.close(); render(); toast('Slettet');
   };
 
+  // Deler på en ført innføring (også i ettertid). Lagres som øyeblikksbilde med pris.
+  let entryPartsDraft = [];
+  const snapSum = list => { let t = 0, any = false; for (const p of list) if (p.price != null){ t += p.price * (p.qty || 1); any = true; } return any ? t : null; };
+  function renderEntryParts(syncCost){
+    $('entryParts').innerHTML = entryPartsDraft.map((p, i) => `<div class="pl"><div class="pn">${esc(p.name)}<small>${esc(fmtNo(p.no))}${p.price != null ? ' · ' + fmtKr(p.price) + (p.pid === 'o1' ? '/l' : '/stk') : ' · pris ikke satt'}</small></div>
+        <input type="number" min="1" step="1" value="${p.qty || 1}" data-eq="${i}" aria-label="Antall">
+        <button type="button" class="px2" data-ex="${i}" aria-label="Fjern">✕</button></div>`).join('')
+      + (entryPartsDraft.length ? `<div class="ptotal"><span>Sum deler</span><span>${fmtKr(snapSum(entryPartsDraft))}</span></div>` : '')
+      + `<button type="button" class="addpart" id="addEntryPart">+ Legg til del fra delelista</button>`;
+    if (syncCost){ const t = snapSum(entryPartsDraft); entryForm.cost.value = t != null ? Math.round(t * 100) / 100 : ''; }
+  }
+  $('entryParts').addEventListener('click', e => {
+    const x = e.target.closest('[data-ex]'); if (x){ entryPartsDraft.splice(+x.dataset.ex, 1); return renderEntryParts(true); }
+    if (e.target.closest('#addEntryPart')) openPicker(pid => {
+      const ex = entryPartsDraft.find(y => y.pid === pid);
+      if (ex) ex.qty = (ex.qty || 1) + 1;
+      else { const p = partById(pid); entryPartsDraft.push({ pid, name: p.name, no: p.no, qty: 1, price: p.price }); }
+      renderEntryParts(true);
+    });
+  });
+  $('entryParts').addEventListener('change', e => { const q = e.target.closest('[data-eq]'); if (q){ entryPartsDraft[+q.dataset.eq].qty = Math.max(1, num(q.value) || 1); renderEntryParts(true); } });
+
+  // ---------- Kostnader ----------
+  let costPeriod = 0;
+  function costPeriods(){
+    const p = [];
+    const k = turnusDay(today());
+    if (k) p.push(['Denne turen', addDays(today(), 1 - k), today()]);
+    p.push(['Denne måneden', today().slice(0,8) + '01', today()]);
+    p.push(['I år', today().slice(0,5) + '01-01', today()]);
+    p.push(['Alt', '0000-01-01', '9999-12-31']);
+    return p;
+  }
+  function renderCosts(){
+    const ps = costPeriods(); if (costPeriod >= ps.length) costPeriod = 0;
+    const [, from, to] = ps[costPeriod];
+    $('costPeriods').innerHTML = ps.map((x, i) => `<button type="button" class="chip ${i===costPeriod?'on':''}" data-cp="${i}">${x[0]}</button>`).join('');
+    const list = allEntries().filter(x => x.e.cost && x.e.date >= from && x.e.date <= to);
+    const total = list.reduce((t, x) => t + x.e.cost, 0);
+    const partsT = list.reduce((t, x) => t + (x.e.parts ? snapSum(x.e.parts) || 0 : 0), 0);
+    const byM = {};
+    for (const {e, m} of list){ const n = m ? m.name : 'Generelt'; byM[n] = (byM[n] || 0) + e.cost; }
+    const rows = Object.entries(byM).sort((a,b) => b[1] - a[1]);
+    $('costBody').innerHTML = `<div style="text-align:center;margin:14px 0 6px"><div class="sub">${ps[costPeriod][0]}${from !== '0000-01-01' ? ' · ' + fmtDate(from) + ' – ' + fmtDate(to) : ''}</div>
+        <div class="bigno">${fmtKr(total)}</div><div class="sub">${list.length} føring${list.length===1?'':'er'} med kostnad${partsT ? ` · deler ${fmtKr(partsT)}` : ''}</div></div>
+      <div class="plist">${rows.map(([n, v]) => `<div class="pl"><div class="pn">${esc(n)}</div><span class="pp">${fmtKr(v)}</span></div>`).join('') || '<p class="sub">Ingen kostnader i perioden.</p>'}</div>`;
+  }
+  $('costBtn').onclick = () => { menuDlg.close(); costPeriod = 0; renderCosts(); $('costDlg').showModal(); };
+  $('costPeriods').addEventListener('click', e => { const b = e.target.closest('[data-cp]'); if (b){ costPeriod = +b.dataset.cp; renderCosts(); } });
+
   // ---------- Til CCOM ----------
   function ccomItems(){
     return db.machines.flatMap(m => m.entries.filter(e => e.jobId).map(e => ({ m, e, j: m.jobs.find(j => j.id === e.jobId) })))
@@ -1177,7 +1239,7 @@
           <div class="meta">
             ${e.hours != null ? `<span>⏱️ ${fmtH(e.hours)} t</span>` : ''}
             ${e.by ? `<span>👤 ${esc(e.by)}</span>` : ''}
-            ${e.cost ? `<span>💰 ${Math.round(e.cost).toLocaleString('no-NO')} kr</span>` : ''}
+            ${e.cost ? `<span>💰 ${fmtKr(e.cost)}</span>` : ''}
           </div>${partsLine(e)}${thumbs(e)}</div>`).join('')
         : `<div class="empty" style="padding:20px"><p>${m.entries.length ? 'Ingen treff.' : 'Ingen loggføringer ennå. Trykk <b>+</b> for å skrive, eller trykk på en jobb og så <b>✓ Utført</b>.'}</p></div>`}
       </div>`;
@@ -1597,6 +1659,7 @@
     updateBunkerField();
     updateHoursField();
     editPhotos = en && en.photos ? [...en.photos] : []; newPhotos = []; renderPhotoEdit();
+    entryPartsDraft = en && en.parts ? en.parts.map(p => ({ ...p })) : []; renderEntryParts(false);
     entryDlg.showModal();
     if (preset) setTimeout(() => entryForm.desc.focus(), 50);
   }
@@ -1608,7 +1671,8 @@
       desc: f.desc.value.trim(), by: f.by.value.trim(), cost: num(f.cost.value),
       bunker: f.type.value === 'maskinrunde' ? num(f.bunker.value) : undefined,
       received: ['drivstoff','overforing'].includes(f.type.value) ? num(f.received.value) : undefined,
-      photos: editPhotos.length ? [...editPhotos] : undefined
+      photos: editPhotos.length ? [...editPhotos] : undefined,
+      parts: entryPartsDraft.length ? entryPartsDraft.map(p => ({ ...p })) : undefined
     };
     if (!data.date) data.date = today();
     const removed = (editingEntry && editingEntry.photos || []).filter(id => !editPhotos.includes(id));
@@ -1851,7 +1915,7 @@
         if (e.date !== day){ day = e.date; const k = turnusDay(day);
           h += `<tr class="pday"><td colspan="6">${dayName(day)} ${fmtDate(day)}${k ? ` · dag ${k} av ${db.turnus.on}` : ''}</td></tr>`; }
         h += `<tr><td>${esc(e.time || '')}</td><td>${m ? esc(m.name) : 'Generelt'}</td><td>${typeLabel(e.type).replace(/^\S+\s/,'')}</td>
-          <td class="pdesc">${e.desc ? esc(e.desc) : '<i>Ikke utfylt</i>'}${estLine(e).replace(/<[^>]+>/g,'') ? '<br><small>' + estLine(e).replace(/<[^>]+>/g,'') + '</small>' : ''}${e.type === 'maskinrunde' ? '<br><small>' + bunkerLine(e).replace(/<[^>]+>/g,'').replace(/ – trykk for å føre/g,'') + '</small>' : ''}${e.cost ? ` (${Math.round(e.cost).toLocaleString('no-NO')} kr)` : ''}</td>
+          <td class="pdesc">${e.desc ? esc(e.desc) : '<i>Ikke utfylt</i>'}${estLine(e).replace(/<[^>]+>/g,'') ? '<br><small>' + estLine(e).replace(/<[^>]+>/g,'') + '</small>' : ''}${e.type === 'maskinrunde' ? '<br><small>' + bunkerLine(e).replace(/<[^>]+>/g,'').replace(/ – trykk for å føre/g,'') + '</small>' : ''}${e.cost ? ` (${fmtKr(e.cost)})` : ''}</td>
           <td class="num">${e.hours != null ? fmtH(e.hours) : ''}</td><td>${esc(e.by || '')}</td></tr>`;
       }
       h += '</tbody></table>';
@@ -1901,7 +1965,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '24';
+  const APP_VERSION = '26';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
