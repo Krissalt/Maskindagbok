@@ -730,7 +730,18 @@
   const machineById = id => db.machines.find(x => x.id === id) || null;
   const curMachine = () => db.machines.find(x => x.id === state.machineId);
 
-  function render(){ renderInner(); hydratePhotos(); }
+  // Anslåtte timer (utført uten avlest timeteller) regnes på nytt hver gang, så de følger nye avlesninger
+  function refreshEstimates(){
+    for (const m of db.machines){
+      for (const e of m.entries) if (e.hours == null && e.hoursEst != null){ const es = estHours(m, e.date); if (es) e.hoursEst = es.hours; }
+      for (const j of m.jobs){
+        if (isDayJob(j)) continue;
+        const last = m.entries.filter(e => e.jobId === j.id).sort((a,b) => b.date.localeCompare(a.date) || (b.time || '').localeCompare(a.time || ''))[0];
+        if (last && last.hours == null && last.hoursEst != null) j.lastHours = last.hoursEst;
+      }
+    }
+  }
+  function render(){ refreshEstimates(); renderInner(); hydratePhotos(); }
   function renderInner(){
     $('tabJournal').classList.toggle('on', state.tab === 'journal');
     $('tabJobs').classList.toggle('on', state.tab === 'jobs');
@@ -1634,16 +1645,20 @@
   doneForm.addEventListener('submit', async e => {
     e.preventDefault();
     const {m, j} = doneCtx || {}; if (!m) return;
-    const h = num(doneForm.hours.value);
+    let h = num(doneForm.hours.value);
     const date = doneForm.date.value || today(), time = doneForm.time.value || nowTime();
     const cur = currentHours(m);
     const note = doneForm.note.value.trim();
-    m.entries.push({ id: uid(), created: Date.now(), jobId: j.id, date, time, hours: h, hoursMissing: h == null && !isDayJob(j),
+    // Uendret forslag som bare var et anslag lagres som anslag, ikke som avlest timeteller
+    const esD = estHours(m, date);
+    const asEst = !isDayJob(j) && !doneForm.hours.dataset.touched && h != null && esD && esD.estimated && h === esD.hours;
+    const hEst = asEst ? h : undefined; if (asEst) h = null;
+    m.entries.push({ id: uid(), created: Date.now(), jobId: j.id, date, time, hours: h, hoursEst: hEst, hoursMissing: h == null && hEst == null && !isDayJob(j),
       type: j.kind || 'service', desc: '✓ ' + j.name + (note ? '\n' + note : ''), by: doneForm.by.value.trim(),
       cost: lineSum(doneLines.filter(l => l.use)), parts: doneLines.some(l => l.use) ? partsSnapshot(doneLines.filter(l => l.use)) : undefined });
     // Jobben flyttes bare frem – en eldre utførelse som føres i ettertid endrer ikke en nyere
     if (isDayJob(j)){ if (!j.lastDate || date >= j.lastDate) j.lastDate = date; }
-    else { const at = h ?? (date === today() ? cur : (estHours(m, date) || {}).hours); if (at != null && at >= (j.lastHours || 0)) j.lastHours = at; }
+    else { const at = h ?? hEst ?? (date === today() ? cur : (estHours(m, date) || {}).hours); if (at != null && at >= (j.lastHours || 0)) j.lastHours = at; }
     if (note){ j.notes = [note, ...(j.notes || []).filter(x => x !== note)].slice(0, 8); }
     save(); doneDlg.close(); render(); { const s2 = jobState(m, j); toast(`✓ ${j.name} ${date !== today() ? 'ført ' + fmtDate(date) : 'utført'} – neste ${s2.day ? fmtDate(s2.next) : 'ved ' + fmtH(s2.next) + ' t'}`); }
   });
@@ -1737,6 +1752,8 @@
       parts: entryPartsDraft.length ? entryPartsDraft.map(p => ({ ...p })) : undefined
     };
     if (!data.date) data.date = today();
+    // Jobb ført uten timeteller: vis anslag som følger avlesningene
+    if (m && editingEntry && editingEntry.jobId){ if (data.hours == null){ const keep = editingEntry.hours; editingEntry.hours = null; const es = estHours(m, data.date); editingEntry.hours = keep; data.hoursEst = es ? es.hours : undefined; data.hoursMissing = !es; } else { data.hoursEst = undefined; data.hoursMissing = false; } }
     const removed = (editingEntry && editingEntry.photos || []).filter(id => !editPhotos.includes(id));
     removed.forEach(id => photoDel(id).catch(()=>{}));
     newPhotos = [];
@@ -2027,7 +2044,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '29';
+  const APP_VERSION = '30';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
