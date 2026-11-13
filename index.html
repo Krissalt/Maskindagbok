@@ -150,6 +150,10 @@
   .addpart{background:none;border:1px dashed var(--line);border-radius:10px;padding:9px;width:100%;margin-top:8px;font:inherit;color:var(--brand);font-weight:600;cursor:pointer}
   .pick{display:flex;justify-content:space-between;gap:8px;padding:11px 2px;border-bottom:1px solid var(--line);cursor:pointer}
   .pick .pno{font-weight:700;color:var(--brand);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .trip-h{font-size:.85rem;font-weight:800;color:var(--accent,#14213d);margin:22px 4px 0;padding-top:10px;border-top:2px solid var(--line,#ddd)}
+  details.trip{margin:14px 0 0;border:1px solid var(--line,#ddd);border-radius:12px;padding:0 10px;background:var(--card,#fff)}
+  details.trip>summary{cursor:pointer;padding:12px 2px;font-weight:700;font-size:.9rem;list-style:revert}
+  details.trip[open]{padding-bottom:10px}
   .day{font-size:.8rem;font-weight:700;color:var(--muted);margin:16px 4px 6px}
   .jentry{display:flex;gap:12px;cursor:pointer}
   .jentry .time{font-weight:700;font-variant-numeric:tabular-nums;min-width:44px;color:var(--brand)}
@@ -722,7 +726,7 @@
   const titleEl = document.getElementById('title');
   const backBtn = document.getElementById('backBtn');
   const editMachineBtn = document.getElementById('editMachineBtn');
-  let state = { tab: 'journal', machineId: null, filter: 'alle', q: '' };
+  let state = { tab: 'journal', machineId: null, filter: 'alle', q: '', openTrips: new Set() };
   const machineById = id => db.machines.find(x => x.id === id) || null;
   const curMachine = () => db.machines.find(x => x.id === state.machineId);
 
@@ -743,6 +747,35 @@
     if (!m) { state.machineId = null; renderList(); } else renderMachine(m);
   }
 
+  function daysHtml(list){
+    let html = '';
+    let day = null;
+    for (const {e,m} of list){
+      if (e.date !== day){ day = e.date; const k = turnusDay(day); const dc = list.filter(x => x.e.date === day).reduce((t, x) => t + (x.e.cost || 0), 0);
+        html += `<div class="day">${dayLabel(day)} · ${fmtDate(day)}${k ? ` · dag ${k}/${db.turnus.on}` : ''}${dc ? ` · 💰 ${fmtKr(dc)}` : ''}</div>`; }
+      html += `<div class="card jentry" data-eid="${e.id}" data-mid="${m ? m.id : ''}">
+        <div class="time">${esc(e.time || '–')}</div>
+        <div class="body">
+          <div><span class="tag">${m ? esc(m.name) : 'Generelt'}</span><span class="sub">${typeLabel(e.type)}</span></div>
+          <div class="desc" style="margin-top:4px;white-space:pre-wrap;word-break:break-word">${e.desc ? esc(e.desc) : '<span class="missing">Ikke utfylt – trykk for å fylle inn</span>'}</div>
+          ${e.hoursMissing ? '<div class="missing sub" style="margin-top:2px">Timeteller ikke fylt inn</div>' : ''}
+          ${e.hours == null && e.hoursEst != null ? `<div class="sub" style="margin-top:2px">⏱️ ~${fmtH(e.hoursEst)} t (anslått)</div>` : ''}
+          ${estLine(e)}
+          ${e.type === 'maskinrunde' ? bunkerLine(e) : ''}
+          ${['drivstoff','overforing'].includes(e.type) ? (e.received ? `<div class="sub" style="margin-top:2px">${e.type === 'overforing' ? '🚢 Overført' : '⛽ Mottatt'} ${fmtL(e.received)} L</div>` : '<div class="missing sub" style="margin-top:2px">Liter ikke fylt inn</div>') : ''}
+          ${partsLine(e)}
+          ${thumbs(e)}
+          ${(e.hours != null || e.by || e.cost) ? `<div class="meta sub" style="margin-top:4px;display:flex;gap:12px;flex-wrap:wrap">
+            ${e.hours != null ? `<span>⏱️ ${fmtH(e.hours)} t</span>` : ''}${e.by ? `<span>👤 ${esc(e.by)}</span>` : ''}${e.cost ? `<span>💰 ${fmtKr(e.cost)}</span>` : ''}</div>` : ''}
+        </div></div>`;
+    }
+    return html;
+  }
+  // Første dag i turen en dato hører til (fridager regnes til turen før)
+  function tripStart(date){
+    const t = db.turnus, cyc = t.on + (t.off || 0);
+    return addDays(date, -(((daysBetween(t.start, date) % cyc) + cyc) % cyc));
+  }
   function renderJournal(){
     titleEl.textContent = 'Dagbok';
     backBtn.hidden = true; editMachineBtn.hidden = true;
@@ -757,26 +790,26 @@
     html += `<input class="search" id="search" type="search" placeholder="Søk i dagboka …" value="${esc(state.q)}">`;
     if (!list.length){
       html += `<div class="empty"><div class="big">📒</div><p>${q ? 'Ingen treff.' : '<b>Dagboka er tom</b></p><p>Trykk på <b>+</b> for å skrive den første innføringen.'}</p></div>`;
+    } else if (q || !db.turnus || !db.turnus.on){
+      html += daysHtml(list);
     } else {
-      let day = null;
-      for (const {e,m} of list){
-        if (e.date !== day){ day = e.date; const k = turnusDay(day); const dc = list.filter(x => x.e.date === day).reduce((t, x) => t + (x.e.cost || 0), 0);
-          html += `<div class="day">${dayLabel(day)} · ${fmtDate(day)}${k ? ` · dag ${k}/${db.turnus.on}` : ''}${dc ? ` · 💰 ${fmtKr(dc)}` : ''}</div>`; }
-        html += `<div class="card jentry" data-eid="${e.id}" data-mid="${m ? m.id : ''}">
-          <div class="time">${esc(e.time || '–')}</div>
-          <div class="body">
-            <div><span class="tag">${m ? esc(m.name) : 'Generelt'}</span><span class="sub">${typeLabel(e.type)}</span></div>
-            <div class="desc" style="margin-top:4px;white-space:pre-wrap;word-break:break-word">${e.desc ? esc(e.desc) : '<span class="missing">Ikke utfylt – trykk for å fylle inn</span>'}</div>
-            ${e.hoursMissing ? '<div class="missing sub" style="margin-top:2px">Timeteller ikke fylt inn</div>' : ''}
-            ${e.hours == null && e.hoursEst != null ? `<div class="sub" style="margin-top:2px">⏱️ ~${fmtH(e.hoursEst)} t (anslått)</div>` : ''}
-            ${estLine(e)}
-            ${e.type === 'maskinrunde' ? bunkerLine(e) : ''}
-            ${['drivstoff','overforing'].includes(e.type) ? (e.received ? `<div class="sub" style="margin-top:2px">${e.type === 'overforing' ? '🚢 Overført' : '⛽ Mottatt'} ${fmtL(e.received)} L</div>` : '<div class="missing sub" style="margin-top:2px">Liter ikke fylt inn</div>') : ''}
-            ${partsLine(e)}
-            ${thumbs(e)}
-            ${(e.hours != null || e.by || e.cost) ? `<div class="meta sub" style="margin-top:4px;display:flex;gap:12px;flex-wrap:wrap">
-              ${e.hours != null ? `<span>⏱️ ${fmtH(e.hours)} t</span>` : ''}${e.by ? `<span>👤 ${esc(e.by)}</span>` : ''}${e.cost ? `<span>💰 ${fmtKr(e.cost)}</span>` : ''}</div>` : ''}
-          </div></div>`;
+      const groups = [];
+      for (const x of list){ const t = tripStart(x.e.date); let g = groups[groups.length-1];
+        if (!g || g.start !== t){ g = {start: t, items: []}; groups.push(g); } g.items.push(x); }
+      const cur = turnusDay(today()) ? tripStart(today()) : null;
+      let firstPast = true;
+      for (const g of groups){
+        const end = addDays(g.start, db.turnus.on - 1), label = `${fmtDate(g.start).replace(/\.\d{4}$/,'')} – ${fmtDate(end)}`;
+        if (g.start === cur){ html += daysHtml(g.items); continue; }
+        const days = [...new Set(g.items.map(x => x.e.date))], n = g.items.length;
+        if (firstPast){
+          firstPast = false;
+          const last = g.items.filter(x => x.e.date === days[0]), rest = g.items.filter(x => x.e.date !== days[0]);
+          html += `<div class="trip-h">⚓ ${cur ? 'Forrige tur' : 'Siste tur'} · ${label}</div>` + daysHtml(last);
+          if (rest.length) html += `<details class="trip" data-trip="${g.start}"${state.openTrips.has(g.start) ? ' open' : ''}><summary>Resten av turen · ${days.length - 1} dager · ${rest.length} føringer</summary>${daysHtml(rest)}</details>`;
+        } else {
+          html += `<details class="trip" data-trip="${g.start}"${state.openTrips.has(g.start) ? ' open' : ''}><summary>⚓ Tur ${label} · ${n} føringer</summary>${daysHtml(g.items)}</details>`;
+        }
       }
     }
     view.innerHTML = html;
@@ -1247,6 +1280,7 @@
     bindSearch();
   }
 
+  view.addEventListener('toggle', e => { const d = e.target; if (d.matches && d.matches('details.trip')) d.open ? state.openTrips.add(d.dataset.trip) : state.openTrips.delete(d.dataset.trip); }, true);
   view.addEventListener('click', e => {
     const t = e.target;
     const ph = t.closest('img[data-photo]'); if (ph){ e.stopPropagation(); return openViewer(ph.dataset.photo); }
@@ -1965,7 +1999,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '27';
+  const APP_VERSION = '28';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
