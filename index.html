@@ -345,7 +345,7 @@
   <label>Type *</label>
   <select name="type" required></select>
   <div id="recvWrap" hidden><label id="recvLabel">⛽ Mottatt (liter)</label><input name="received" type="number" inputmode="numeric" min="0" step="1" placeholder="F.eks. 12000"></div>
-  <div id="bunkerWrap" hidden><label>⛽ Bunkersbeholdning (liter)</label><input name="bunker" type="number" inputmode="numeric" min="0" step="1" placeholder="F.eks. 42300"><p class="hint" id="bunkerHint"></p></div>
+  <div id="bunkerWrap" hidden><label>⛽ Bunkersbeholdning (liter)</label><input name="bunker" type="number" inputmode="numeric" min="0" step="1" placeholder="F.eks. 42300"><p class="hint" id="bunkerHint"></p><label>📍 Posisjon</label><div style="display:flex;gap:8px"><input name="pos" placeholder="F.eks. Hjelmsøy eller 62°28,1'N 006°09,4'E" style="flex:1;min-width:0"><button type="button" id="gpsBtn" class="btn" style="white-space:nowrap;flex:none;width:auto;padding:0 14px">📡 GPS</button></div></div>
   <label>Deler brukt</label>
   <div class="plist" id="entryParts"></div>
   <label>Bilder</label>
@@ -761,7 +761,7 @@
           ${e.hoursMissing ? '<div class="missing sub" style="margin-top:2px">Timeteller ikke fylt inn</div>' : ''}
           ${e.hours == null && e.hoursEst != null ? `<div class="sub" style="margin-top:2px">⏱️ ~${fmtH(e.hoursEst)} t (anslått)</div>` : ''}
           ${estLine(e)}
-          ${e.type === 'maskinrunde' ? bunkerLine(e) : ''}
+          ${e.type === 'maskinrunde' ? bunkerLine(e) + posLine(e) : ''}
           ${['drivstoff','overforing'].includes(e.type) ? (e.received ? `<div class="sub" style="margin-top:2px">${e.type === 'overforing' ? '🚢 Overført' : '⛽ Mottatt'} ${fmtL(e.received)} L</div>` : '<div class="missing sub" style="margin-top:2px">Liter ikke fylt inn</div>') : ''}
           ${partsLine(e)}
           ${thumbs(e)}
@@ -781,7 +781,7 @@
     backBtn.hidden = true; editMachineBtn.hidden = true;
     const q = state.q.trim().toLowerCase();
     let list = allEntries();
-    if (q) list = list.filter(({e,m}) => [e.desc, e.by, typeLabel(e.type), m ? m.name : 'generelt'].join(' ').toLowerCase().includes(q));
+    if (q) list = list.filter(({e,m}) => [e.desc, e.by, e.pos, typeLabel(e.type), m ? m.name : 'generelt'].join(' ').toLowerCase().includes(q));
     let html = '';
     if (!q) html = `<div class="quick">${QUICK.map((x,i) => `<button data-quick="${i}"><b>${x.icon}</b>${x.label}</button>`).join('')}
       <button id="photoBtn"><b>📷</b>Bilde</button>
@@ -1177,6 +1177,23 @@
     });
   }
   // Anslåtte timer i maskinrunden – vises bare for maskiner som ikke har ført timer den dagen
+  // Posisjon: grader og desimalminutter, som på kartplotteren
+  function fmtPos(g){
+    const f = (v, w, p, n) => { const a = Math.abs(v), d = Math.floor(a), mi = (a - d) * 60;
+      return `${String(d).padStart(w,'0')}°${mi.toFixed(1).replace('.',',').padStart(4,'0')}'${v >= 0 ? p : n}`; };
+    return `${f(g.lat, 2, 'N', 'S')} ${f(g.lon, 3, 'E', 'W')}`;
+  }
+  function getGps(){
+    return new Promise(res => {
+      if (!navigator.geolocation) return res(null);
+      navigator.geolocation.getCurrentPosition(p => res({ lat: +p.coords.latitude.toFixed(5), lon: +p.coords.longitude.toFixed(5) }),
+        () => res(null), { enableHighAccuracy: true, timeout: 20000, maximumAge: 300000 });
+    });
+  }
+  function posLine(e){
+    if (!e.pos) return '';
+    return `<div class="sub" style="margin-top:2px">📍 ${esc(e.pos)}${e.gps ? ` <a class="maplink" href="https://www.google.com/maps?q=${e.gps.lat},${e.gps.lon}" target="_blank" rel="noopener">kart</a>` : ''}</div>`;
+  }
   function bunkerLine(e){
     if (e.bunker != null) return `<div class="sub" style="margin-top:2px">⛽ Bunkers: ${fmtL(e.bunker)} L</div>`;
     const es = bunkerEst(e.date);
@@ -1283,6 +1300,7 @@
   view.addEventListener('toggle', e => { const d = e.target; if (d.matches && d.matches('details.trip')) d.open ? state.openTrips.add(d.dataset.trip) : state.openTrips.delete(d.dataset.trip); }, true);
   view.addEventListener('click', e => {
     const t = e.target;
+    if (t.closest('a.maplink')) return;
     const ph = t.closest('img[data-photo]'); if (ph){ e.stopPropagation(); return openViewer(ph.dataset.photo); }
     if (t.closest('#photoBtn')) return $('photoQuick').click();
     if (t.closest('#meterBtn')) return openMeterDlg();
@@ -1337,6 +1355,7 @@
     const en = { id: uid(), created: Date.now(), date, time: '07:00', type: 'maskinrunde',
       desc: 'Maskinrunde' + (k ? ` – dag ${k} av ${db.turnus.on}` : ''), by: '', cost: null, hours: null, estimates };
     db.general.push(en); save(); render(); window.scrollTo(0,0);
+    if (date === today()) getGps().then(g => { if (g && db.general.includes(en) && !en.pos){ en.gps = g; en.pos = fmtPos(g); save(); render(); } });
     toast(`🌅 ${dayLabel(date)}${k ? ` – dag ${k} av ${db.turnus.on}` : ''} · maskinrunde kl. 07:00`, 'Angre', () => {
       db.general = db.general.filter(x => x !== en); save(); render(); toast('Angret');
     });
@@ -1638,7 +1657,13 @@
   // Logg
   const entryDlg = $('entryDlg'), entryForm = $('entryForm');
   entryForm.type.innerHTML = TYPES.map(t => `<option value="${t[0]}">${t[1]}</option>`).join('');
-  let editingEntry = null, entryJob = null, entryFrom = null;
+  let editingEntry = null, entryJob = null, entryFrom = null, editGps = null;
+  $('gpsBtn').onclick = async () => {
+    const b = $('gpsBtn'); b.disabled = true; b.textContent = '⏳';
+    const g = await getGps(); b.disabled = false; b.textContent = '📡 GPS';
+    if (!g) return toast('Fikk ikke GPS-posisjon – skriv inn stedet i stedet');
+    editGps = g; entryForm.pos.value = fmtPos(g);
+  };
   function fillMachineSelect(sel){
     entryForm.machine.innerHTML = `<option value="">Generelt (ingen maskin)</option>` +
       db.machines.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
@@ -1680,10 +1705,11 @@
     if (job) $('entryJobHint').textContent = `Jobben «${job.name}» blir satt som utført ved timetallet du skriver inn.`;
     const cur = m ? currentHours(m) : null;
     if (en){
-      entryForm.date.value = en.date; entryForm.time.value = en.time || ''; entryForm.hours.value = en.hours ?? ''; entryForm.bunker.value = en.bunker ?? ''; entryForm.received.value = en.received ?? '';
+      entryForm.date.value = en.date; entryForm.time.value = en.time || ''; entryForm.hours.value = en.hours ?? ''; entryForm.bunker.value = en.bunker ?? ''; entryForm.pos.value = en.pos || ''; editGps = en.gps || null; entryForm.received.value = en.received ?? '';
       entryForm.type.value = en.type; entryForm.desc.value = en.desc;
       entryForm.by.value = en.by || ''; entryForm.cost.value = en.cost ?? '';
     } else {
+      editGps = null;
       entryForm.date.value = today(); entryForm.time.value = nowTime();
       if (job){ entryForm.hours.value = cur ?? ''; entryForm.type.value = job.kind || 'service'; entryForm.desc.value = job.name; }
       else entryForm.type.value = (state.tab !== 'journal' && state.filter !== 'alle') ? state.filter : (m ? 'service' : 'annet');
@@ -1704,6 +1730,8 @@
       date: f.date.value, time: f.time.value, hours: m ? num(f.hours.value) : null, type: f.type.value,
       desc: f.desc.value.trim(), by: f.by.value.trim(), cost: num(f.cost.value),
       bunker: f.type.value === 'maskinrunde' ? num(f.bunker.value) : undefined,
+      pos: f.type.value === 'maskinrunde' && f.pos.value.trim() ? f.pos.value.trim() : undefined,
+      gps: f.type.value === 'maskinrunde' && f.pos.value.trim() && editGps && f.pos.value.trim() === fmtPos(editGps) ? editGps : undefined,
       received: ['drivstoff','overforing'].includes(f.type.value) ? num(f.received.value) : undefined,
       photos: editPhotos.length ? [...editPhotos] : undefined,
       parts: entryPartsDraft.length ? entryPartsDraft.map(p => ({ ...p })) : undefined
@@ -1846,7 +1874,7 @@
           <tr><td>${y}</td><td>${MON_SHORT[mo-1]}</td><td>${da}</td><td>${dayName(d)}</td>${k ? `<td>Dag ${k} av ${db.turnus.on}</td>` : ''}</tr></table>
         <h2>Anmerkninger</h2>
         <table class="anm"><tbody>${ents.length ? ents.map(({e,m}) => {
-          const extra = [estLine(e).replace(/<[^>]+>/g,''), e.type === 'maskinrunde' ? bunkerLine(e).replace(/<[^>]+>/g,'').replace(/ – trykk for å føre/g,'').replace(/\(anslått\)/,'(anslått)') : ''].filter(Boolean).join('<br>');
+          const extra = [estLine(e).replace(/<[^>]+>/g,''), e.type === 'maskinrunde' ? bunkerLine(e).replace(/<[^>]+>/g,'').replace(/ – trykk for å føre/g,'').replace(/\(anslått\)/,'(anslått)') : '', e.pos ? '📍 ' + esc(e.pos) : ''].filter(Boolean).join('<br>');
           return `<tr><td>${esc((e.time || '').replace(':',''))}</td><td class="pdesc">${m ? '<b>' + esc(m.name) + ':</b> ' : ''}${e.desc ? esc(e.desc) : typeLabel(e.type).replace(/^\S+\s/,'')}${e.received ? ` – ${e.type === 'overforing' ? 'overført' : 'mottatt'} ${fmtL(e.received)} L` : ''}${e.hours != null ? ` (${fmtH(e.hours)} t)` : ''}${e.by ? ` – ${esc(e.by)}` : ''}${extra ? `<br><small class="est">${extra}</small>` : ''}</td></tr>`;
         }).join('') : '<tr><td></td><td class="est">Ingen føringer</td></tr>'}</tbody></table>
         <h2>Sammendrag av antall driftstimer siden siste overhaling</h2>
@@ -1949,7 +1977,7 @@
         if (e.date !== day){ day = e.date; const k = turnusDay(day);
           h += `<tr class="pday"><td colspan="6">${dayName(day)} ${fmtDate(day)}${k ? ` · dag ${k} av ${db.turnus.on}` : ''}</td></tr>`; }
         h += `<tr><td>${esc(e.time || '')}</td><td>${m ? esc(m.name) : 'Generelt'}</td><td>${typeLabel(e.type).replace(/^\S+\s/,'')}</td>
-          <td class="pdesc">${e.desc ? esc(e.desc) : '<i>Ikke utfylt</i>'}${estLine(e).replace(/<[^>]+>/g,'') ? '<br><small>' + estLine(e).replace(/<[^>]+>/g,'') + '</small>' : ''}${e.type === 'maskinrunde' ? '<br><small>' + bunkerLine(e).replace(/<[^>]+>/g,'').replace(/ – trykk for å føre/g,'') + '</small>' : ''}${e.cost ? ` (${fmtKr(e.cost)})` : ''}</td>
+          <td class="pdesc">${e.desc ? esc(e.desc) : '<i>Ikke utfylt</i>'}${estLine(e).replace(/<[^>]+>/g,'') ? '<br><small>' + estLine(e).replace(/<[^>]+>/g,'') + '</small>' : ''}${e.type === 'maskinrunde' ? '<br><small>' + bunkerLine(e).replace(/<[^>]+>/g,'').replace(/ – trykk for å føre/g,'') + (e.pos ? ' · 📍 ' + esc(e.pos) : '') + '</small>' : ''}${e.cost ? ` (${fmtKr(e.cost)})` : ''}</td>
           <td class="num">${e.hours != null ? fmtH(e.hours) : ''}</td><td>${esc(e.by || '')}</td></tr>`;
       }
       h += '</tbody></table>';
@@ -1999,7 +2027,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '28';
+  const APP_VERSION = '29';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
