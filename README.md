@@ -1,6 +1,6 @@
-# Telemetry
+# Machinery
 
-Telemetry (tidligere Maskindagbok) er en enkel maskindagbok for mobil. Ingen innlogging – alt lagres på telefonen og virker uten nett.
+Machinery (tidligere Maskindagbok) er en enkel maskindagbok for mobil. Ingen innlogging – alt lagres på telefonen og virker uten nett.
 
 **Åpne appen:** https://krissalt.github.io/Maskindagbok/
 

@@ -1,6 +1,6 @@
 {
-  "name": "Telemetry",
-  "short_name": "Telemetry",
+  "name": "Machinery",
+  "short_name": "Machinery",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
