@@ -189,6 +189,16 @@
   .btn.del{background:var(--bad-soft);color:var(--bad);flex:0 0 auto;padding:12px 14px}
   .menu-list button{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:14px 4px;font:inherit;color:var(--ink);cursor:pointer}
   .hint{font-size:.8rem;color:var(--muted);margin-top:4px}
+  .verbtn{float:right;margin:0;border:none;background:none;color:var(--muted);font:inherit;font-size:.8rem;
+    text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:6px 2px}
+  #changelogList{max-height:62vh;overflow-y:auto;margin-top:8px;padding:0 2px;outline:none}
+  .cl-ver{margin-bottom:14px}
+  .cl-ver h3{margin:0 0 6px;font-size:.85rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+    display:flex;gap:8px;align-items:baseline}
+  .cl-ver.current h3{color:var(--accent)}
+  .cl-ver h3 span{text-transform:none;letter-spacing:0;font-weight:400;font-size:.8rem}
+  .cl-ver ul{margin:0;padding:10px 14px 10px 28px;background:var(--card);border-radius:12px}
+  .cl-ver li{font-size:.9rem;line-height:1.4;padding:2px 0}
   .jobdesc{white-space:pre-wrap;background:var(--soft);border-radius:10px;padding:10px 12px;margin:10px 0;font-size:.92rem}
   .toast{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);background:var(--soft2);color:var(--ink);border:1px solid var(--line);padding:10px 16px;border-radius:10px;font-size:.9rem;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
   .toast.show{opacity:1}
@@ -398,6 +408,13 @@
   <div class="btns"><button class="btn sec" data-close>Lukk</button></div>
 </div></dialog>
 
+<!-- Versjonslogg -->
+<dialog id="changelogDlg"><div class="dlg">
+  <h2>📋 Versjonslogg</h2>
+  <div id="changelogList" tabindex="-1"></div>
+  <div class="btns"><button class="btn sec" data-close autofocus>Lukk</button></div>
+</div></dialog>
+
 <!-- Til CCOM -->
 <dialog id="ccomDlg"><div class="dlg">
   <h2>📤 Til CCOM</h2>
@@ -464,7 +481,7 @@
     <button id="turnusBtn">🗓️ Turnus</button>
     <button id="seedBtn">⚙️ Hent maskinavdelingens jobber fra CCOM</button>
   </div>
-  <p class="hint" id="ver" style="float:right;margin:0"></p>
+  <button type="button" class="verbtn" id="ver" aria-label="Vis versjonslogg"></button>
   <p class="hint">Alt lagres kun på denne telefonen, i nettleseren. Ta sikkerhetskopi av og til, så mister du ingenting hvis nettleserdata slettes.</p>
   <div class="btns"><button class="btn sec" data-close>Lukk</button></div>
 </div></dialog>
@@ -500,6 +517,7 @@
 <input type="file" id="photoAdd" accept="image/*" multiple hidden>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 
+<script src="changelog.js"></script>
 <script>
 (() => {
   const KEY = 'maskindagbok.v1';
@@ -2054,7 +2072,7 @@
   render();
 
   // Installerbar app: virker uten nett, oppdaterer seg selv når en ny versjon legges ut
-  const APP_VERSION = '32';
+  const APP_VERSION = (window.CHANGELOG && CHANGELOG[0] && CHANGELOG[0].v) || '33';
   try {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
       const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
@@ -2067,6 +2085,29 @@
     }
   } catch(e){}
   const vEl = document.getElementById('ver'); if (vEl) vEl.textContent = 'Versjon ' + APP_VERSION;
+
+  // ---------- Versjonslogg ----------
+  const SEEN = 'maskindagbok.seenversion';
+  function clDate(d){ try { return new Date(d + 'T12:00:00').toLocaleDateString('no-NO', {day:'numeric', month:'long', year:'numeric'}); } catch(e){ return d; } }
+  function openChangelog(){
+    const list = window.CHANGELOG || [];
+    $('changelogList').innerHTML = list.map((c, i) => `<section class="cl-ver${i === 0 ? ' current' : ''}">
+      <h3>Versjon ${esc(c.v)}${i === 0 ? ' · denne' : ''} <span>${esc(clDate(c.date))}</span></h3>
+      <ul>${c.items.map(t => `<li>${esc(t)}</li>`).join('')}</ul></section>`).join('');
+    try { localStorage.setItem(SEEN, APP_VERSION); } catch(e){}
+    const m = $('menuDlg'); if (m && m.open) m.close();
+    $('changelogDlg').showModal();
+  }
+  if (vEl) vEl.onclick = openChangelog;
+  // Etter en oppdatering: vis kort hva som er nytt (ikke første gang appen tas i bruk)
+  try {
+    const seen = localStorage.getItem(SEEN);
+    const inUse = !!localStorage.getItem(KEY);
+    if (seen !== APP_VERSION){
+      localStorage.setItem(SEEN, APP_VERSION);
+      if (seen !== null || inUse) setTimeout(() => toast('Oppdatert til versjon ' + APP_VERSION, 'Se hva som er nytt', openChangelog), 600);
+    }
+  } catch(e){}
 })();
 </script>
 </body>
